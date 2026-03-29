@@ -1,0 +1,1022 @@
+[
+  {
+    "slug": "double-slap",
+    "ja": "おうふくビンタ"
+  },
+  {
+    "slug": "comet-punch",
+    "ja": "れんぞくパンチ"
+  },
+  {
+    "slug": "vice-grip",
+    "ja": "はさむ"
+  },
+  {
+    "slug": "razor-wind",
+    "ja": "かまいたち"
+  },
+  {
+    "slug": "cut",
+    "ja": "いあいぎり"
+  },
+  {
+    "slug": "mega-kick",
+    "ja": "メガトンキック"
+  },
+  {
+    "slug": "rolling-kick",
+    "ja": "まわしげり"
+  },
+  {
+    "slug": "fury-attack",
+    "ja": "みだれづき"
+  },
+  {
+    "slug": "twineedle",
+    "ja": "ダブルニードル"
+  },
+  {
+    "slug": "sonic-boom",
+    "ja": "ソニックブーム"
+  },
+  {
+    "slug": "bubble-beam",
+    "ja": "バブルこうせん"
+  },
+  {
+    "slug": "thunder-shock",
+    "ja": "でんきショック"
+  },
+  {
+    "slug": "meditate",
+    "ja": "ヨガのポーズ"
+  },
+  {
+    "slug": "rage",
+    "ja": "いかり"
+  },
+  {
+    "slug": "egg-bomb",
+    "ja": "タマゴばくだん"
+  },
+  {
+    "slug": "bone-club",
+    "ja": "ホネこんぼう"
+  },
+  {
+    "slug": "clamp",
+    "ja": "からではさむ"
+  },
+  {
+    "slug": "spike-cannon",
+    "ja": "とげキャノン"
+  },
+  {
+    "slug": "constrict",
+    "ja": "からみつく"
+  },
+  {
+    "slug": "kinesis",
+    "ja": "スプーンまげ"
+  },
+  {
+    "slug": "poison-gas",
+    "ja": "どくガス"
+  },
+  {
+    "slug": "barrage",
+    "ja": "たまなげ"
+  },
+  {
+    "slug": "lovely-kiss",
+    "ja": "あくまのキッス"
+  },
+  {
+    "slug": "bubble",
+    "ja": "あわ"
+  },
+  {
+    "slug": "dizzy-punch",
+    "ja": "ピヨピヨパンチ"
+  },
+  {
+    "slug": "psywave",
+    "ja": "サイコウェーブ"
+  },
+  {
+    "slug": "hyper-fang",
+    "ja": "ひっさつまえば"
+  },
+  {
+    "slug": "sharpen",
+    "ja": "かくばる"
+  },
+  {
+    "slug": "conversion",
+    "ja": "テクスチャー"
+  },
+  {
+    "slug": "super-fang",
+    "ja": "いかりのまえば"
+  },
+  {
+    "slug": "sketch",
+    "ja": "スケッチ"
+  },
+  {
+    "slug": "triple-kick",
+    "ja": "トリプルキック"
+  },
+  {
+    "slug": "spider-web",
+    "ja": "クモのす"
+  },
+  {
+    "slug": "conversion-2",
+    "ja": "テクスチャー２"
+  },
+  {
+    "slug": "sweet-kiss",
+    "ja": "てんしのキッス"
+  },
+  {
+    "slug": "octazooka",
+    "ja": "オクタンほう"
+  },
+  {
+    "slug": "foresight",
+    "ja": "みやぶる"
+  },
+  {
+    "slug": "megahorn",
+    "ja": "メガホーン"
+  },
+  {
+    "slug": "psych-up",
+    "ja": "じこあんじ"
+  },
+  {
+    "slug": "smelling-salts",
+    "ja": "きつけ"
+  },
+  {
+    "slug": "charge",
+    "ja": "じゅうでん"
+  },
+  {
+    "slug": "assist",
+    "ja": "ねこのて"
+  },
+  {
+    "slug": "recycle",
+    "ja": "リサイクル"
+  },
+  {
+    "slug": "secret-power",
+    "ja": "ひみつのちから"
+  },
+  {
+    "slug": "camouflage",
+    "ja": "ほごしょく"
+  },
+  {
+    "slug": "luster-purge",
+    "ja": "ラスターパージ"
+  },
+  {
+    "slug": "mist-ball",
+    "ja": "ミストボール"
+  },
+  {
+    "slug": "feather-dance",
+    "ja": "フェザーダンス"
+  },
+  {
+    "slug": "teeter-dance",
+    "ja": "フラフラダンス"
+  },
+  {
+    "slug": "mud-sport",
+    "ja": "どろあそび"
+  },
+  {
+    "slug": "ice-ball",
+    "ja": "アイスボール"
+  },
+  {
+    "slug": "crush-claw",
+    "ja": "ブレイククロー"
+  },
+  {
+    "slug": "blast-burn",
+    "ja": "ブラストバーン"
+  },
+  {
+    "slug": "astonish",
+    "ja": "おどろかす"
+  },
+  {
+    "slug": "fake-tears",
+    "ja": "うそなき"
+  },
+  {
+    "slug": "odor-sleuth",
+    "ja": "かぎわける"
+  },
+  {
+    "slug": "grass-whistle",
+    "ja": "くさぶえ"
+  },
+  {
+    "slug": "poison-tail",
+    "ja": "ポイズンテール"
+  },
+  {
+    "slug": "covet",
+    "ja": "ほしがる"
+  },
+  {
+    "slug": "water-sport",
+    "ja": "みずあそび"
+  },
+  {
+    "slug": "shock-wave",
+    "ja": "でんげきは"
+  },
+  {
+    "slug": "psycho-boost",
+    "ja": "サイコブースト"
+  },
+  {
+    "slug": "wake-up-slap",
+    "ja": "めざましビンタ"
+  },
+  {
+    "slug": "feint",
+    "ja": "フェイント"
+  },
+  {
+    "slug": "heal-block",
+    "ja": "かいふくふうじ"
+  },
+  {
+    "slug": "wring-out",
+    "ja": "しぼりとる"
+  },
+  {
+    "slug": "power-trick",
+    "ja": "パワートリック"
+  },
+  {
+    "slug": "lucky-chant",
+    "ja": "おまじない"
+  },
+  {
+    "slug": "me-first",
+    "ja": "さきどり"
+  },
+  {
+    "slug": "heart-swap",
+    "ja": "ハートスワップ"
+  },
+  {
+    "slug": "aqua-ring",
+    "ja": "アクアリング"
+  },
+  {
+    "slug": "magnet-rise",
+    "ja": "でんじふゆう"
+  },
+  {
+    "slug": "force-palm",
+    "ja": "はっけい"
+  },
+  {
+    "slug": "mud-bomb",
+    "ja": "どろばくだん"
+  },
+  {
+    "slug": "rock-climb",
+    "ja": "ロッククライム"
+  },
+  {
+    "slug": "chatter",
+    "ja": "おしゃべり"
+  },
+  {
+    "slug": "attack-order",
+    "ja": "こうげきしれい"
+  },
+  {
+    "slug": "defend-order",
+    "ja": "ぼうぎょしれい"
+  },
+  {
+    "slug": "heal-order",
+    "ja": "かいふくしれい"
+  },
+  {
+    "slug": "crush-grip",
+    "ja": "にぎりつぶす"
+  },
+  {
+    "slug": "dark-void",
+    "ja": "ダークホール"
+  },
+  {
+    "slug": "seed-flare",
+    "ja": "シードフレア"
+  },
+  {
+    "slug": "guard-split",
+    "ja": "ガードシェア"
+  },
+  {
+    "slug": "power-split",
+    "ja": "パワーシェア"
+  },
+  {
+    "slug": "storm-throw",
+    "ja": "やまあらし"
+  },
+  {
+    "slug": "sky-drop",
+    "ja": "フリーフォール"
+  },
+  {
+    "slug": "inferno",
+    "ja": "れんごく"
+  },
+  {
+    "slug": "water-pledge",
+    "ja": "みずのちかい"
+  },
+  {
+    "slug": "fire-pledge",
+    "ja": "ほのおのちかい"
+  },
+  {
+    "slug": "grass-pledge",
+    "ja": "くさのちかい"
+  },
+  {
+    "slug": "steamroller",
+    "ja": "ハードローラー"
+  },
+  {
+    "slug": "tail-slap",
+    "ja": "スイープビンタ"
+  },
+  {
+    "slug": "head-charge",
+    "ja": "アフロブレイク"
+  },
+  {
+    "slug": "gear-grind",
+    "ja": "ギアソーサー"
+  },
+  {
+    "slug": "searing-shot",
+    "ja": "かえんだん"
+  },
+  {
+    "slug": "techno-blast",
+    "ja": "テクノバスター"
+  },
+  {
+    "slug": "relic-song",
+    "ja": "いにしえのうた"
+  },
+  {
+    "slug": "secret-sword",
+    "ja": "しんぴのつるぎ"
+  },
+  {
+    "slug": "mat-block",
+    "ja": "たたみがえし"
+  },
+  {
+    "slug": "rototiller",
+    "ja": "たがやす"
+  },
+  {
+    "slug": "noble-roar",
+    "ja": "おたけび"
+  },
+  {
+    "slug": "ion-deluge",
+    "ja": "プラズマシャワー"
+  },
+  {
+    "slug": "forests-curse",
+    "ja": "もりののろい"
+  },
+  {
+    "slug": "crafty-shield",
+    "ja": "トリックガード"
+  },
+  {
+    "slug": "flower-shield",
+    "ja": "フラワーガード"
+  },
+  {
+    "slug": "electrify",
+    "ja": "そうでん"
+  },
+  {
+    "slug": "play-nice",
+    "ja": "なかよくする"
+  },
+  {
+    "slug": "confide",
+    "ja": "ないしょばなし"
+  },
+  {
+    "slug": "aromatic-mist",
+    "ja": "アロマミスト"
+  },
+  {
+    "slug": "happy-hour",
+    "ja": "ハッピータイム"
+  },
+  {
+    "slug": "celebrate",
+    "ja": "おいわい"
+  },
+  {
+    "slug": "hold-hands",
+    "ja": "てをつなぐ"
+  },
+  {
+    "slug": "hold-back",
+    "ja": "てかげん"
+  },
+  {
+    "slug": "lands-wrath",
+    "ja": "グランドフォース"
+  },
+  {
+    "slug": "light-of-ruin",
+    "ja": "はめつのひかり"
+  },
+  {
+    "slug": "breakneck-blitz--physical",
+    "ja": "ウルトラダッシュアタック"
+  },
+  {
+    "slug": "breakneck-blitz--special",
+    "ja": "ウルトラダッシュアタック"
+  },
+  {
+    "slug": "all-out-pummeling--physical",
+    "ja": "ぜんりょくむそうげきれつけん"
+  },
+  {
+    "slug": "all-out-pummeling--special",
+    "ja": "ぜんりょくむそうげきれつけん"
+  },
+  {
+    "slug": "supersonic-skystrike--physical",
+    "ja": "ファイナルダイブクラッシュ"
+  },
+  {
+    "slug": "supersonic-skystrike--special",
+    "ja": "ファイナルダイブクラッシュ"
+  },
+  {
+    "slug": "acid-downpour--physical",
+    "ja": "アシッドポイズンデリート"
+  },
+  {
+    "slug": "acid-downpour--special",
+    "ja": "アシッドポイズンデリート"
+  },
+  {
+    "slug": "tectonic-rage--physical",
+    "ja": "ライジングランドオーバー"
+  },
+  {
+    "slug": "tectonic-rage--special",
+    "ja": "ライジングランドオーバー"
+  },
+  {
+    "slug": "continental-crush--physical",
+    "ja": "ワールズエンドフォール"
+  },
+  {
+    "slug": "continental-crush--special",
+    "ja": "ワールズエンドフォール"
+  },
+  {
+    "slug": "savage-spin-out--physical",
+    "ja": "ぜったいほしょくかいてんざん"
+  },
+  {
+    "slug": "savage-spin-out--special",
+    "ja": "ぜったいほしょくかいてんざん"
+  },
+  {
+    "slug": "never-ending-nightmare--physical",
+    "ja": "むげんあんやへのいざない"
+  },
+  {
+    "slug": "never-ending-nightmare--special",
+    "ja": "むげんあんやへのいざない"
+  },
+  {
+    "slug": "corkscrew-crash--physical",
+    "ja": "ちょうぜつらせんれんげき"
+  },
+  {
+    "slug": "corkscrew-crash--special",
+    "ja": "ちょうぜつらせんれんげき"
+  },
+  {
+    "slug": "inferno-overdrive--physical",
+    "ja": "ダイナミックフルフレイム"
+  },
+  {
+    "slug": "inferno-overdrive--special",
+    "ja": "ダイナミックフルフレイム"
+  },
+  {
+    "slug": "hydro-vortex--physical",
+    "ja": "スーパーアクアトルネード"
+  },
+  {
+    "slug": "hydro-vortex--special",
+    "ja": "スーパーアクアトルネード"
+  },
+  {
+    "slug": "bloom-doom--physical",
+    "ja": "ブルームシャインエクストラ"
+  },
+  {
+    "slug": "bloom-doom--special",
+    "ja": "ブルームシャインエクストラ"
+  },
+  {
+    "slug": "gigavolt-havoc--physical",
+    "ja": "スパーキングギガボルト"
+  },
+  {
+    "slug": "gigavolt-havoc--special",
+    "ja": "スパーキングギガボルト"
+  },
+  {
+    "slug": "shattered-psyche--physical",
+    "ja": "マキシマムサイブレイカー"
+  },
+  {
+    "slug": "shattered-psyche--special",
+    "ja": "マキシマムサイブレイカー"
+  },
+  {
+    "slug": "subzero-slammer--physical",
+    "ja": "レイジングジオフリーズ"
+  },
+  {
+    "slug": "subzero-slammer--special",
+    "ja": "レイジングジオフリーズ"
+  },
+  {
+    "slug": "devastating-drake--physical",
+    "ja": "アルティメットドラゴンバーン"
+  },
+  {
+    "slug": "devastating-drake--special",
+    "ja": "アルティメットドラゴンバーン"
+  },
+  {
+    "slug": "black-hole-eclipse--physical",
+    "ja": "ブラックホールイクリプス"
+  },
+  {
+    "slug": "black-hole-eclipse--special",
+    "ja": "ブラックホールイクリプス"
+  },
+  {
+    "slug": "twinkle-tackle--physical",
+    "ja": "ラブリースターインパクト"
+  },
+  {
+    "slug": "twinkle-tackle--special",
+    "ja": "ラブリースターインパクト"
+  },
+  {
+    "slug": "catastropika",
+    "ja": "ひっさつのピカチュート"
+  },
+  {
+    "slug": "ice-hammer",
+    "ja": "アイスハンマー"
+  },
+  {
+    "slug": "leafage",
+    "ja": "このは"
+  },
+  {
+    "slug": "spotlight",
+    "ja": "スポットライト"
+  },
+  {
+    "slug": "toxic-thread",
+    "ja": "どくのいと"
+  },
+  {
+    "slug": "laser-focus",
+    "ja": "とぎすます"
+  },
+  {
+    "slug": "purify",
+    "ja": "じょうか"
+  },
+  {
+    "slug": "beak-blast",
+    "ja": "くちばしキャノン"
+  },
+  {
+    "slug": "dragon-hammer",
+    "ja": "ドラゴンハンマー"
+  },
+  {
+    "slug": "sinister-arrow-raid",
+    "ja": "シャドーアローズストライク"
+  },
+  {
+    "slug": "malicious-moonsault",
+    "ja": "ハイパーダーククラッシャー"
+  },
+  {
+    "slug": "guardian-of-alola",
+    "ja": "ガーディアン・デ・アローラ"
+  },
+  {
+    "slug": "soul-stealing-7-star-strike",
+    "ja": "しちせいだっこんたい"
+  },
+  {
+    "slug": "stoked-sparksurfer",
+    "ja": "ライトニングサーフライド"
+  },
+  {
+    "slug": "pulverizing-pancake",
+    "ja": "ほんきをだす　こうげき"
+  },
+  {
+    "slug": "extreme-evoboost",
+    "ja": "ナインエボルブースト"
+  },
+  {
+    "slug": "genesis-supernova",
+    "ja": "オリジンズスーパーノヴァ"
+  },
+  {
+    "slug": "shell-trap",
+    "ja": "トラップシェル"
+  },
+  {
+    "slug": "shadow-bone",
+    "ja": "シャドーボーン"
+  },
+  {
+    "slug": "prismatic-laser",
+    "ja": "プリズムレーザー"
+  },
+  {
+    "slug": "tearful-look",
+    "ja": "なみだめ"
+  },
+  {
+    "slug": "10-000-000-volt-thunderbolt",
+    "ja": "１０００まんボルト"
+  },
+  {
+    "slug": "light-that-burns-the-sky",
+    "ja": "てんこがすめつぼうのひかり"
+  },
+  {
+    "slug": "searing-sunraze-smash",
+    "ja": "サンシャインスマッシャー"
+  },
+  {
+    "slug": "lets-snuggle-forever",
+    "ja": "ぽかぼかフレンドタイム"
+  },
+  {
+    "slug": "splintered-stormshards",
+    "ja": "ラジアルエッジストーム"
+  },
+  {
+    "slug": "clangorous-soulblaze",
+    "ja": "ブレイジングソウルビート"
+  },
+  {
+    "slug": "zippy-zap",
+    "ja": "ばちばちアクセル"
+  },
+  {
+    "slug": "splishy-splash",
+    "ja": "ざぶざぶサーフ"
+  },
+  {
+    "slug": "floaty-fall",
+    "ja": "ふわふわフォール"
+  },
+  {
+    "slug": "pika-papow",
+    "ja": "ピカピカサンダー"
+  },
+  {
+    "slug": "bouncy-bubble",
+    "ja": "いきいきバブル"
+  },
+  {
+    "slug": "buzzy-buzz",
+    "ja": "びりびりエレキ"
+  },
+  {
+    "slug": "sizzly-slide",
+    "ja": "めらめらバーン"
+  },
+  {
+    "slug": "glitzy-glow",
+    "ja": "どばどばオーラ"
+  },
+  {
+    "slug": "sappy-seed",
+    "ja": "すくすくボンバー"
+  },
+  {
+    "slug": "freezy-frost",
+    "ja": "こちこちフロスト"
+  },
+  {
+    "slug": "sparkly-swirl",
+    "ja": "きらきらストーム"
+  },
+  {
+    "slug": "veevee-volley",
+    "ja": "ブイブイブレイク"
+  },
+  {
+    "slug": "stuff-cheeks",
+    "ja": "ほおばる"
+  },
+  {
+    "slug": "magic-powder",
+    "ja": "まほうのこな"
+  },
+  {
+    "slug": "teatime",
+    "ja": "おちゃかい"
+  },
+  {
+    "slug": "octolock",
+    "ja": "たこがため"
+  },
+  {
+    "slug": "max-flare",
+    "ja": "ダイバーン"
+  },
+  {
+    "slug": "max-flutterby",
+    "ja": "ダイワーム"
+  },
+  {
+    "slug": "max-lightning",
+    "ja": "ダイサンダー"
+  },
+  {
+    "slug": "max-strike",
+    "ja": "ダイアタック"
+  },
+  {
+    "slug": "max-knuckle",
+    "ja": "ダイナックル"
+  },
+  {
+    "slug": "max-phantasm",
+    "ja": "ダイホロウ"
+  },
+  {
+    "slug": "max-hailstorm",
+    "ja": "ダイアイス"
+  },
+  {
+    "slug": "max-ooze",
+    "ja": "ダイアシッド"
+  },
+  {
+    "slug": "max-geyser",
+    "ja": "ダイストリーム"
+  },
+  {
+    "slug": "max-airstream",
+    "ja": "ダイジェット"
+  },
+  {
+    "slug": "max-starfall",
+    "ja": "ダイフェアリー"
+  },
+  {
+    "slug": "max-wyrmwind",
+    "ja": "ダイドラグーン"
+  },
+  {
+    "slug": "max-mindstorm",
+    "ja": "ダイサイコ"
+  },
+  {
+    "slug": "max-rockfall",
+    "ja": "ダイロック"
+  },
+  {
+    "slug": "max-quake",
+    "ja": "ダイアース"
+  },
+  {
+    "slug": "max-darkness",
+    "ja": "ダイアーク"
+  },
+  {
+    "slug": "max-overgrowth",
+    "ja": "ダイソウゲン"
+  },
+  {
+    "slug": "max-steelspike",
+    "ja": "ダイスチル"
+  },
+  {
+    "slug": "decorate",
+    "ja": "デコレーション"
+  },
+  {
+    "slug": "snap-trap",
+    "ja": "トラバサミ"
+  },
+  {
+    "slug": "aura-wheel",
+    "ja": "オーラぐるま"
+  },
+  {
+    "slug": "branch-poke",
+    "ja": "えだづき"
+  },
+  {
+    "slug": "overdrive",
+    "ja": "オーバードライブ"
+  },
+  {
+    "slug": "life-dew",
+    "ja": "いのちのしずく"
+  },
+  {
+    "slug": "false-surrender",
+    "ja": "どげざつき"
+  },
+  {
+    "slug": "meteor-assault",
+    "ja": "スターアサルト"
+  },
+  {
+    "slug": "steel-roller",
+    "ja": "アイアンローラー"
+  },
+  {
+    "slug": "shell-side-arm",
+    "ja": "シェルアームズ"
+  },
+  {
+    "slug": "freezing-glare",
+    "ja": "いてつくしせん"
+  },
+  {
+    "slug": "eerie-spell",
+    "ja": "ぶきみなじゅもん"
+  },
+  {
+    "slug": "psyshield-bash",
+    "ja": "バリアーラッシュ"
+  },
+  {
+    "slug": "power-shift",
+    "ja": "パワーシフト"
+  },
+  {
+    "slug": "stone-axe",
+    "ja": "がんせきアックス"
+  },
+  {
+    "slug": "springtide-storm",
+    "ja": "はるのあらし"
+  },
+  {
+    "slug": "mountain-gale",
+    "ja": "ひょうざんおろし"
+  },
+  {
+    "slug": "shelter",
+    "ja": "たてこもる"
+  },
+  {
+    "slug": "triple-arrows",
+    "ja": "３ぼんのや"
+  },
+  {
+    "slug": "ceaseless-edge",
+    "ja": "ひけん・ちえなみ"
+  },
+  {
+    "slug": "wildbolt-storm",
+    "ja": "かみなりあらし"
+  },
+  {
+    "slug": "sandsear-storm",
+    "ja": "ねっさのあらし"
+  },
+  {
+    "slug": "take-heart",
+    "ja": "ブレイブチャージ"
+  },
+  {
+    "slug": "axe-kick",
+    "ja": "かかとおとし"
+  },
+  {
+    "slug": "triple-dive",
+    "ja": "トリプルダイブ"
+  },
+  {
+    "slug": "shadow-rush",
+    "ja": "shadow-rush"
+  },
+  {
+    "slug": "shadow-blast",
+    "ja": "shadow-blast"
+  },
+  {
+    "slug": "shadow-blitz",
+    "ja": "shadow-blitz"
+  },
+  {
+    "slug": "shadow-bolt",
+    "ja": "shadow-bolt"
+  },
+  {
+    "slug": "shadow-break",
+    "ja": "shadow-break"
+  },
+  {
+    "slug": "shadow-chill",
+    "ja": "shadow-chill"
+  },
+  {
+    "slug": "shadow-end",
+    "ja": "shadow-end"
+  },
+  {
+    "slug": "shadow-fire",
+    "ja": "shadow-fire"
+  },
+  {
+    "slug": "shadow-rave",
+    "ja": "shadow-rave"
+  },
+  {
+    "slug": "shadow-storm",
+    "ja": "shadow-storm"
+  },
+  {
+    "slug": "shadow-wave",
+    "ja": "shadow-wave"
+  },
+  {
+    "slug": "shadow-down",
+    "ja": "shadow-down"
+  },
+  {
+    "slug": "shadow-half",
+    "ja": "shadow-half"
+  },
+  {
+    "slug": "shadow-hold",
+    "ja": "shadow-hold"
+  },
+  {
+    "slug": "shadow-mist",
+    "ja": "shadow-mist"
+  },
+  {
+    "slug": "shadow-panic",
+    "ja": "shadow-panic"
+  },
+  {
+    "slug": "shadow-shed",
+    "ja": "shadow-shed"
+  },
+  {
+    "slug": "shadow-sky",
+    "ja": "shadow-sky"
+  }
+]

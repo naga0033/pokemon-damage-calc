@@ -1,0 +1,152 @@
+/**
+ * 持ち物リスト（採用率順）
+ * Smogon gen9ubers 2026-02 の使用率データに基づくソート
+ * ダメージ計算に影響するアイテムを中心に
+ */
+export interface ItemEntry {
+  slug: string;
+  ja: string;
+  /** ダメージ計算上の効果分類 */
+  effect?: "choice-band" | "choice-specs" | "life-orb" | "expert-belt" |
+           "type-boost" | "assault-vest" | "eviolite" | "rocky-helmet" |
+           "mega-stone" | "none";
+  /** type-boost の場合の対象タイプ */
+  boostType?: string;
+}
+
+export const ITEMS: ItemEntry[] = [
+  { slug: "", ja: "もちものを選択（なし）", effect: "none" },
+
+  // ── 採用率順（Smogon gen9ubers 2026-02） ──
+  { slug: "heavy-duty-boots", ja: "あつぞこブーツ",      effect: "none" },
+  { slug: "leftovers",        ja: "たべのこし",          effect: "none" },
+  { slug: "choice-scarf",     ja: "こだわりスカーフ",    effect: "none" },
+  { slug: "focus-sash",       ja: "きあいのタスキ",      effect: "none" },
+  { slug: "life-orb",         ja: "いのちのたま",        effect: "life-orb" },
+  { slug: "loaded-dice",      ja: "いかさまダイス",      effect: "none" },
+  { slug: "rocky-helmet",     ja: "ゴツゴツメット",      effect: "rocky-helmet" },
+  { slug: "choice-specs",     ja: "こだわりメガネ",      effect: "choice-specs" },
+  { slug: "choice-band",      ja: "こだわりハチマキ",    effect: "choice-band" },
+  { slug: "weakness-policy",  ja: "じゃくてんほけん",    effect: "none" },
+  { slug: "assault-vest",     ja: "とつげきチョッキ",    effect: "assault-vest" },
+  { slug: "air-balloon",      ja: "ふうせん",            effect: "none" },
+  { slug: "booster-energy",   ja: "ブーストエナジー",    effect: "none" },
+  { slug: "toxic-orb",        ja: "どくどくだま",        effect: "none" },
+  { slug: "lum-berry",        ja: "ラムのみ",            effect: "none" },
+  { slug: "sitrus-berry",     ja: "オボンのみ",          effect: "none" },
+  { slug: "eviolite",         ja: "しんかのきせき",      effect: "eviolite" },
+  { slug: "flame-orb",        ja: "かえんだま",          effect: "none" },
+  { slug: "black-sludge",     ja: "くろいヘドロ",        effect: "none" },
+  { slug: "expert-belt",      ja: "たつじんのおび",      effect: "expert-belt" },
+  { slug: "wide-lens",        ja: "ひろいレンズ",        effect: "none" },
+  { slug: "safety-goggles",   ja: "ぼうじんゴーグル",    effect: "none" },
+  { slug: "clear-amulet",     ja: "クリアチャーム",      effect: "none" },
+  { slug: "mirror-herb",      ja: "ミラーハーブ",        effect: "none" },
+  { slug: "covert-cloak",     ja: "おんみつマント",      effect: "none" },
+  { slug: "punching-glove",   ja: "パンチグローブ",      effect: "none" },
+  { slug: "iron-ball",        ja: "くろいてっきゅう",    effect: "none" },
+  { slug: "scope-lens",       ja: "ピントレンズ",        effect: "none" },
+  { slug: "muscle-band",      ja: "ちからのハチマキ",    effect: "none" },
+  { slug: "wise-glasses",     ja: "ものしりめがね",      effect: "none" },
+  { slug: "protective-pads",  ja: "ぼうごパット",        effect: "none" },
+  { slug: "shed-shell",       ja: "きれいなぬけがら",    effect: "none" },
+  { slug: "terrain-extender", ja: "グランドコート",      effect: "none" },
+
+  // ── タイプ強化アイテム（1.2倍） ──
+  { slug: "silk-scarf",       ja: "シルクのスカーフ",    effect: "type-boost", boostType: "normal" },
+  { slug: "charcoal",         ja: "もくたん",            effect: "type-boost", boostType: "fire" },
+  { slug: "mystic-water",     ja: "しんぴのしずく",      effect: "type-boost", boostType: "water" },
+  { slug: "magnet",           ja: "じしゃく",            effect: "type-boost", boostType: "electric" },
+  { slug: "miracle-seed",     ja: "きせきのタネ",        effect: "type-boost", boostType: "grass" },
+  { slug: "never-melt-ice",   ja: "とけないこおり",      effect: "type-boost", boostType: "ice" },
+  { slug: "black-belt",       ja: "くろおび",            effect: "type-boost", boostType: "fighting" },
+  { slug: "poison-barb",      ja: "どくばり",            effect: "type-boost", boostType: "poison" },
+  { slug: "soft-sand",        ja: "やわらかいすな",      effect: "type-boost", boostType: "ground" },
+  { slug: "sharp-beak",       ja: "するどいくちばし",    effect: "type-boost", boostType: "flying" },
+  { slug: "twisted-spoon",    ja: "まがったスプーン",    effect: "type-boost", boostType: "psychic" },
+  { slug: "silver-powder",    ja: "ぎんのこな",          effect: "type-boost", boostType: "bug" },
+  { slug: "hard-stone",       ja: "かたいいし",          effect: "type-boost", boostType: "rock" },
+  { slug: "spell-tag",        ja: "のろいのおふだ",      effect: "type-boost", boostType: "ghost" },
+  { slug: "dragon-fang",      ja: "りゅうのキバ",        effect: "type-boost", boostType: "dragon" },
+  { slug: "black-glasses",    ja: "くろいメガネ",        effect: "type-boost", boostType: "dark" },
+  { slug: "metal-coat",       ja: "メタルコート",        effect: "type-boost", boostType: "steel" },
+  { slug: "fairy-feather",    ja: "ようせいのはね",      effect: "type-boost", boostType: "fairy" },
+
+  // ── メガストーン ──
+  { slug: "charizardite-x",   ja: "リザードナイトX",     effect: "mega-stone" },
+  { slug: "charizardite-y",   ja: "リザードナイトY",     effect: "mega-stone" },
+  { slug: "kangaskhanite",    ja: "ガルーラナイト",       effect: "mega-stone" },
+  { slug: "gengarite",        ja: "ゲンガナイト",         effect: "mega-stone" },
+  { slug: "lucarionite",      ja: "ルカリオナイト",       effect: "mega-stone" },
+  { slug: "salamencite",      ja: "ボーマンダナイト",     effect: "mega-stone" },
+  { slug: "metagrossite",     ja: "メタグロスナイト",     effect: "mega-stone" },
+  { slug: "garchompite",      ja: "ガブリアスナイト",     effect: "mega-stone" },
+  { slug: "gardevoirite",     ja: "サーナイトナイト",     effect: "mega-stone" },
+  { slug: "blazikenite",      ja: "バシャーモナイト",     effect: "mega-stone" },
+  { slug: "lopunnite",        ja: "ミミロップナイト",     effect: "mega-stone" },
+  { slug: "mawilite",         ja: "クチートナイト",       effect: "mega-stone" },
+  { slug: "scizorite",        ja: "ハッサムナイト",       effect: "mega-stone" },
+  { slug: "alakazite",        ja: "フーディナイト",       effect: "mega-stone" },
+  { slug: "gyaradosite",      ja: "ギャラドスナイト",     effect: "mega-stone" },
+  { slug: "venusaurite",      ja: "フシギバナナイト",     effect: "mega-stone" },
+  { slug: "blastoisinite",    ja: "カメックスナイト",     effect: "mega-stone" },
+  { slug: "beedrillite",      ja: "スピアーナイト",       effect: "mega-stone" },
+  { slug: "pidgeotite",       ja: "ピジョットナイト",     effect: "mega-stone" },
+  { slug: "slowbronite",      ja: "ヤドランナイト",       effect: "mega-stone" },
+  { slug: "aerodactylite",    ja: "プテラナイト",         effect: "mega-stone" },
+  { slug: "mewtwonite-x",     ja: "ミュウツーナイトX",    effect: "mega-stone" },
+  { slug: "mewtwonite-y",     ja: "ミュウツーナイトY",    effect: "mega-stone" },
+  { slug: "ampharosite",      ja: "デンリュウナイト",     effect: "mega-stone" },
+  { slug: "steelixite",       ja: "ハガネールナイト",     effect: "mega-stone" },
+  { slug: "heracronite",      ja: "ヘラクロスナイト",     effect: "mega-stone" },
+  { slug: "houndoominite",    ja: "ヘルガナイト",         effect: "mega-stone" },
+  { slug: "tyranitarite",     ja: "バンギラスナイト",     effect: "mega-stone" },
+  { slug: "sceptilite",       ja: "ジュカインナイト",     effect: "mega-stone" },
+  { slug: "swampertite",      ja: "ラグラージナイト",     effect: "mega-stone" },
+  { slug: "sablenite",        ja: "ヤミラミナイト",       effect: "mega-stone" },
+  { slug: "aggronite",        ja: "ボスゴドラナイト",     effect: "mega-stone" },
+  { slug: "medichamite",      ja: "チャーレムナイト",     effect: "mega-stone" },
+  { slug: "manectite",        ja: "ライボルトナイト",     effect: "mega-stone" },
+  { slug: "sharpedonite",     ja: "サメハダーナイト",     effect: "mega-stone" },
+  { slug: "cameruptite",      ja: "バクーダナイト",       effect: "mega-stone" },
+  { slug: "altarianite",      ja: "チルタリスナイト",     effect: "mega-stone" },
+  { slug: "banettite",        ja: "ジュペッタナイト",     effect: "mega-stone" },
+  { slug: "absolite",         ja: "アブソルナイト",       effect: "mega-stone" },
+  { slug: "glalitite",        ja: "オニゴーリナイト",     effect: "mega-stone" },
+  { slug: "latiasite",        ja: "ラティアスナイト",     effect: "mega-stone" },
+  { slug: "latiosite",        ja: "ラティオスナイト",     effect: "mega-stone" },
+  { slug: "abomasite",        ja: "ユキノオーナイト",     effect: "mega-stone" },
+  { slug: "galladite",        ja: "エルレイドナイト",     effect: "mega-stone" },
+  { slug: "audinite",         ja: "タブンネナイト",       effect: "mega-stone" },
+  { slug: "diancite",         ja: "ディアンシーナイト",   effect: "mega-stone" },
+  { slug: "pinsirite",        ja: "カイロスナイト",       effect: "mega-stone" },
+  // Z-A 新メガストーン
+  { slug: "meganiumite",      ja: "メガニウムナイト",     effect: "mega-stone" },
+  { slug: "feraligatrite",    ja: "オーダイルナイト",     effect: "mega-stone" },
+  { slug: "raichunite-x",     ja: "ライチュウナイトX",    effect: "mega-stone" },
+  { slug: "raichunite-y",     ja: "ライチュウナイトY",    effect: "mega-stone" },
+  { slug: "clefablite",       ja: "ピクシーナイト",       effect: "mega-stone" },
+  { slug: "victreebelite",    ja: "ウツボットナイト",     effect: "mega-stone" },
+  { slug: "starmiite",        ja: "スターミーナイト",     effect: "mega-stone" },
+  { slug: "dragonitite",      ja: "カイリューナイト",     effect: "mega-stone" },
+  { slug: "emboarite",        ja: "エンブオーナイト",     effect: "mega-stone" },
+  { slug: "excadrillite",     ja: "ドリュウズナイト",     effect: "mega-stone" },
+  { slug: "chandelurite",     ja: "シャンデラナイト",     effect: "mega-stone" },
+  { slug: "greninjaite",      ja: "ゲッコウガナイト",     effect: "mega-stone" },
+  { slug: "skarmoryite",      ja: "エアームドナイト",     effect: "mega-stone" },
+  { slug: "chesnaughtite",    ja: "ブリガロンナイト",     effect: "mega-stone" },
+  { slug: "delphoxite",       ja: "マフォクシーナイト",   effect: "mega-stone" },
+  { slug: "dragalgite",       ja: "ドラミドロナイト",     effect: "mega-stone" },
+  { slug: "malamarite",       ja: "カラマネロナイト",     effect: "mega-stone" },
+  { slug: "froslassite",      ja: "ユキメノコナイト",     effect: "mega-stone" },
+  { slug: "heatranite",       ja: "ヒードランナイト",     effect: "mega-stone" },
+  { slug: "drampite",         ja: "ジジーロンナイト",     effect: "mega-stone" },
+  { slug: "darkraite",        ja: "ダークライナイト",     effect: "mega-stone" },
+  { slug: "baxcaliburite",    ja: "セグレイブナイト",     effect: "mega-stone" },
+  { slug: "floettite",        ja: "フラエッテナイト",     effect: "mega-stone" },
+  { slug: "hawluchite",       ja: "ルチャブルナイト",     effect: "mega-stone" },
+];
+
+export const ITEM_MAP: Record<string, ItemEntry> = Object.fromEntries(
+  ITEMS.map((i) => [i.slug, i])
+);
