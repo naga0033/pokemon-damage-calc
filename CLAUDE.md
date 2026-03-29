@@ -1,6 +1,6 @@
 # ルール
-- 作業が完了したら必ず以下のコマンドでMacに通知を送ること
-  osascript -e 'display notification "作業が完了しました" with title "Claude Code"'
+- 作業が完了したら必ず以下のコマンドでMacに通知+通知音を鳴らすこと
+  osascript -e 'display notification "作業が完了しました" with title "Claude Code" sound name "Glass"'
 - コメントは日本語で書くこと
 - 実装完了後は必ず以下を確認してから完了報告すること
   1. `npm run build` でビルドエラーがないことを確認

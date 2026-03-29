@@ -80,6 +80,10 @@ interface Props {
   onWeatherChange: (v: WeatherCondition) => void;
   terrain: TerrainCondition;
   onTerrainChange: (v: TerrainCondition) => void;
+  attackerWeight?: number;  // 攻撃側体重（ヘビーボンバー威力計算用）
+  defenderWeight?: number;  // 防御側体重
+  isPaybackDoubled?: boolean;        // しっぺがえし後攻時（威力2倍）
+  onPaybackDoubledChange?: (v: boolean) => void;
 }
 
 const CATEGORY_LABEL: Record<string, string> = {
@@ -104,6 +108,8 @@ export default function MoveSelector({
   isBurned, onBurnedChange,
   isCharged, onChargedChange,
   weather, onWeatherChange, terrain, onTerrainChange,
+  attackerWeight, defenderWeight,
+  isPaybackDoubled, onPaybackDoubledChange,
 }: Props) {
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState("");
@@ -308,7 +314,7 @@ export default function MoveSelector({
                 : "bg-gray-100 text-gray-500 hover:bg-indigo-100 hover:text-indigo-600"
             }`}
             title="かな入力キーボード"
-          >キーボード</button>
+          >⌨ キーボード</button>
           {loading && (
             <div className="absolute right-16 top-2.5">
               <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
@@ -432,7 +438,15 @@ export default function MoveSelector({
             </span>
           </div>
           <div className="flex gap-4 text-sm text-gray-600 flex-wrap">
-            <span>威力: <strong className="text-gray-900">{selectedMove.power ?? "—"}</strong></span>
+            <span>威力: <strong className="text-gray-900">{
+              (selectedMove.name === "heavy-slam" || selectedMove.name === "heat-crash") && attackerWeight && defenderWeight
+                ? (() => { const r = attackerWeight / defenderWeight; if (r >= 5) return 120; if (r >= 4) return 100; if (r >= 3) return 80; if (r >= 2) return 60; return 40; })()
+                : (selectedMove.name === "grass-knot" || selectedMove.name === "low-kick") && defenderWeight
+                  ? (() => { const kg = defenderWeight / 10; if (kg >= 200) return 120; if (kg >= 100) return 100; if (kg >= 50) return 80; if (kg >= 25) return 60; if (kg >= 10) return 40; return 20; })()
+                  : selectedMove.name === "payback" && isPaybackDoubled
+                    ? (selectedMove.power ?? 50) * 2
+                    : selectedMove.power ?? "—"
+            }</strong></span>
             <span>命中: <strong className="text-gray-900">{selectedMove.accuracy ?? "—"}</strong></span>
             {(selectedMove as MoveData & { pp?: number }).pp != null && (
               <span>PP: <strong className="text-gray-900">{(selectedMove as MoveData & { pp?: number }).pp}</strong></span>
@@ -441,6 +455,18 @@ export default function MoveSelector({
               <span>優先度: <strong className="text-gray-900">{selectedMove.priority > 0 ? `+${selectedMove.priority}` : selectedMove.priority}</strong></span>
             )}
           </div>
+          {/* しっぺがえし: 後攻時威力2倍 */}
+          {selectedMove.name === "payback" && onPaybackDoubledChange && (
+            <label className="flex items-center gap-1.5 text-[11px] cursor-pointer mt-1">
+              <input
+                type="checkbox"
+                checked={isPaybackDoubled ?? false}
+                onChange={(e) => onPaybackDoubledChange(e.target.checked)}
+                className="rounded w-3.5 h-3.5"
+              />
+              <span className="font-medium text-gray-600">後攻時（威力2倍: 50→100）</span>
+            </label>
+          )}
         </div>
       )}
 

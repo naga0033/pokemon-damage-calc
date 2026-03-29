@@ -43,6 +43,12 @@ interface DamageInput {
   isDefenderFullHp?: boolean;
   /** 防御側がダイマックス中か */
   isDefenderDynamaxed?: boolean;
+  /** 攻撃側の体重（ヘクトグラム） */
+  attackerWeight?: number;
+  /** 防御側の体重（ヘクトグラム） */
+  defenderWeight?: number;
+  /** しっぺがえし後攻フラグ（威力2倍） */
+  isPaybackDoubled?: boolean;
 }
 
 function rankMult(rank: number): number {
@@ -71,7 +77,9 @@ export function calcDamage(input: DamageInput): DamageResult {
   // ダイマックス: 防御側のHPを2倍
   const effectiveDefenderHp = input.isDefenderDynamaxed ? defenderHp * 2 : defenderHp;
 
-  if (!move.power) {
+  // 体重依存技（ヘビーボンバー・ヒートスタンプ）は power=null でも計算を続行
+  const isWeightMove = move.name === "heavy-slam" || move.name === "heat-crash" || move.name === "grass-knot" || move.name === "low-kick";
+  if (!move.power && !isWeightMove) {
     return {
       minDamage: 0, maxDamage: 0,
       minPercent: 0, maxPercent: 0,
@@ -202,6 +210,40 @@ export function calcDamage(input: DamageInput): DamageResult {
   let effectivePower = move.power ?? 0;
   if (move.name === "tera-blast" && isTerastallized && attackerTeraType === "stellar") {
     effectivePower = 100;
+  }
+  // ヘビーボンバー・ヒートスタンプ: 攻撃側÷防御側の体重比で威力が変動
+  if (move.name === "heavy-slam" || move.name === "heat-crash") {
+    const atkW = input.attackerWeight ?? 0;
+    const defW = input.defenderWeight ?? 0;
+    if (atkW > 0 && defW > 0) {
+      const ratio = atkW / defW;
+      if (ratio >= 5)      effectivePower = 120;
+      else if (ratio >= 4) effectivePower = 100;
+      else if (ratio >= 3) effectivePower = 80;
+      else if (ratio >= 2) effectivePower = 60;
+      else                 effectivePower = 40;
+    } else {
+      effectivePower = 60;
+    }
+  }
+  // くさむすび・けたぐり: 防御側の体重で威力が変動
+  if (move.name === "grass-knot" || move.name === "low-kick") {
+    const defW = input.defenderWeight ?? 0;
+    if (defW > 0) {
+      const kg = defW / 10; // PokeAPIはヘクトグラム→kgに変換
+      if (kg >= 200)      effectivePower = 120;
+      else if (kg >= 100) effectivePower = 100;
+      else if (kg >= 50)  effectivePower = 80;
+      else if (kg >= 25)  effectivePower = 60;
+      else if (kg >= 10)  effectivePower = 40;
+      else                effectivePower = 20;
+    } else {
+      effectivePower = 60;
+    }
+  }
+  // しっぺがえし: 後攻時に威力2倍
+  if (move.name === "payback" && input.isPaybackDoubled) {
+    effectivePower = effectivePower * 2;
   }
   // スキン系特性の威力補正（1.2倍）
   if (skinMod !== 1) {

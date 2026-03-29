@@ -17,6 +17,7 @@ interface Props {
   onSelect: (pokemon: PokemonData) => void;
   label: string;
   pokemonName?: string;
+  placeholder?: string;
   onBoxSelect?: (state: PokemonState, moves?: string[]) => void;
 }
 
@@ -27,7 +28,7 @@ interface SearchResult {
   boxEntry?: BoxEntry;
 }
 
-export default function PokemonSearch({ onSelect, label, pokemonName, onBoxSelect }: Props) {
+export default function PokemonSearch({ onSelect, label, pokemonName, placeholder, onBoxSelect }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -232,7 +233,7 @@ export default function PokemonSearch({ onSelect, label, pokemonName, onBoxSelec
               }`}
               style={{ backgroundColor: boxPanelOpen ? "#1e88e5" : "#fff", color: boxPanelOpen ? "#fff" : "#1e88e5", border: "1px solid #1e88e5" }}
             >
-              登録ポケモンから検索
+              登録済のポケモンから選ぶ
             </button>
 
             {/* 登録ポケモン フルスクリーンパネル */}
@@ -397,7 +398,7 @@ export default function PokemonSearch({ onSelect, label, pokemonName, onBoxSelec
           onChange={(e) => handleChange(e.target.value)}
           onFocus={handleFocus}
           onKeyDown={handleKeyDown}
-          placeholder="例: ピカチュウ、カイリュー"
+          placeholder={placeholder ?? "クリックしてポケモンを選んでね"}
           className="w-full min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 pr-16"
         />
         {/* カタカナキーボード トグルボタン */}
@@ -421,7 +422,7 @@ export default function PokemonSearch({ onSelect, label, pokemonName, onBoxSelec
               : "bg-gray-100 text-gray-500 hover:bg-indigo-100 hover:text-indigo-600"
           }`}
           title="カタカナ入力キーボード"
-        >キーボード</button>
+        >⌨ キーボード</button>
         {loading && (
           <div className="absolute right-12 top-2.5">
             <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />

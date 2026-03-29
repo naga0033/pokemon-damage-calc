@@ -1047,62 +1047,6 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
         {/* データ読み込みエリア */}
         <div className="flex-shrink-0 border-b bg-gray-50 border-gray-200">
           <div className="px-4 py-3 space-y-2">
-            {/* スクショ ドロップゾーン */}
-            <div
-              className={`relative border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-all duration-200 ${
-                isDragOver
-                  ? "border-purple-500 bg-purple-50 scale-[1.01] shadow-lg"
-                  : ocrPreview
-                    ? "border-green-300 bg-green-50"
-                    : "border-gray-300 bg-white hover:border-purple-400 hover:bg-purple-50/50"
-              }`}
-              onClick={() => ocrInputRef.current?.click()}
-              onDrop={(e) => {
-                e.preventDefault();
-                setIsDragOver(false);
-                const f = e.dataTransfer.files[0];
-                if (f?.type.startsWith("image/")) handleOcrFile(f);
-              }}
-              onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
-              onDragLeave={() => setIsDragOver(false)}
-            >
-              {ocrLoading ? (
-                <div className="flex flex-col items-center gap-2 py-2">
-                  {ocrPreview && <img src={ocrPreview} alt="" className="max-h-16 rounded-lg object-contain shadow-sm opacity-60" />}
-                  <div className="w-6 h-6 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
-                  <p className="text-sm font-bold text-purple-600">画像からテキストを読み取り中...</p>
-                </div>
-              ) : ocrPreview && !ocrError ? (
-                <div className="flex flex-col items-center gap-2 py-2">
-                  <img src={ocrPreview} alt="" className="max-h-20 rounded-lg object-contain shadow-sm" />
-                  <p className="text-xs font-bold text-green-600">読み取り完了 - フォームに反映しました</p>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center gap-2 py-1">
-                  {/* 紫色のファイルアイコン */}
-                  <div className="w-12 h-12 flex items-center justify-center">
-                    <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <rect x="6" y="2" width="28" height="36" rx="3" stroke="#8B5CF6" strokeWidth="2" fill="#F5F3FF"/>
-                      <rect x="6" y="2" width="28" height="36" rx="3" fill="#EDE9FE" opacity="0.5"/>
-                      <path d="M14 16L20 22L26 16" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                      <line x1="20" y1="10" x2="20" y2="22" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round"/>
-                      <line x1="12" y1="28" x2="28" y2="28" stroke="#8B5CF6" strokeWidth="2" strokeLinecap="round"/>
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-gray-700">ポケモンの名前、性格、努力値、技が</p>
-                    <p className="text-sm font-bold text-gray-700">写ってるスクショをドロップしてね!</p>
-                    <p className="text-[11px] text-gray-400 mt-0.5">またはクリックしてファイルを選択</p>
-                  </div>
-                </div>
-              )}
-              <input ref={ocrInputRef} type="file" accept="image/*" className="hidden"
-                onChange={(e) => { const f = e.target.files?.[0]; if (f) handleOcrFile(f); e.target.value = ""; }} />
-            </div>
-            {ocrError && (
-              <p className={`text-xs px-1 ${ocrError.includes("項目を反映") ? "text-amber-600" : "text-red-500"}`}>{ocrError}</p>
-            )}
-
             {/* ポケモン候補選択UI */}
             {pokeCandidates.length > 1 && (
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
@@ -1887,9 +1831,23 @@ function CurrentHpEditor({
 // ───────────────────────────────────────
 // 逆算ツール（独立セクション）
 // ───────────────────────────────────────
-function ReverseDamageSection({ rolls, defenderHp, minDamage, maxDamage }: { rolls: number[]; defenderHp: number; minDamage: number; maxDamage: number }) {
+function ReverseDamageSection({ rolls, defenderHp, minDamage, maxDamage, defenderBaseDef, defenderBaseHp, defenderLevel = 50, defenderNatureMod = 1, moveCategory, defenseStat, onApplyDefEv,
+  attackerBaseAtk, attackerLevel = 50, attackStat, onApplyAtkEv,
+}: {
+  rolls: number[]; defenderHp: number; minDamage: number; maxDamage: number;
+  defenderBaseDef?: number; defenderBaseHp?: number; defenderLevel?: number; defenderNatureMod?: number;
+  moveCategory?: "physical" | "special" | "status"; defenseStat?: number;
+  onApplyDefEv?: (hpEv: number, defEv: number) => void;
+  // 攻撃側EV逆算用
+  attackerBaseAtk?: number;  // 攻撃側のこうげき/とくこう種族値
+  attackerLevel?: number;
+  attackStat?: number;       // 現在の攻撃側実数値
+  onApplyAtkEv?: (ev: number, natureMod: number) => void; // EV + 性格補正を適用
+}) {
   const [input, setInput] = useState("");
   const [numpadOpen, setNumpadOpen] = useState(false);
+  const [calcOpen, setCalcOpen] = useState(false);
+  const [calcExpr, setCalcExpr] = useState("");
   const ref = useRef<HTMLDivElement>(null);
   const num = parseInt(input, 10);
   const boosts = useMemo(() => (Number.isFinite(num) && num > 0 ? inferBoosts(num, rolls) : []), [num, rolls]);
@@ -1910,7 +1868,53 @@ function ReverseDamageSection({ rolls, defenderHp, minDamage, maxDamage }: { rol
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 space-y-2">
-      <p className="text-xs font-bold text-gray-700">受けたダメージから逆算</p>
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-bold text-gray-700">受けたダメージから相手の型を予測</p>
+        <button
+          onClick={() => setCalcOpen(!calcOpen)}
+          className={`text-[10px] px-2 py-0.5 rounded-md border font-medium transition-colors ${calcOpen ? "bg-gray-700 text-white border-gray-700" : "bg-white text-gray-500 border-gray-300 hover:bg-gray-50"}`}
+        >🧮 電卓</button>
+      </div>
+      {/* 簡易電卓（フローティング・上方向に展開） */}
+      {calcOpen && (
+        <div className="relative">
+        {/* 背景オーバーレイ: 電卓の外をタップで閉じる */}
+        <div className="fixed inset-0 z-40" onClick={() => setCalcOpen(false)} />
+        <div className="absolute bottom-0 right-0 z-50 bg-white border border-gray-300 rounded-xl shadow-2xl p-2.5 space-y-1.5 w-52">
+          <div className="text-right text-sm font-mono bg-white border border-gray-200 rounded px-2 py-1 min-h-[1.8rem] text-gray-800">
+            {calcExpr || <span className="text-gray-300">0</span>}
+          </div>
+          <div className="grid grid-cols-4 gap-1">
+            {["7","8","9","+","4","5","6","-","1","2","3","×","0","C","=","÷"].map((k) => (
+              <button key={k}
+                className={`text-sm font-bold rounded py-1.5 transition-colors ${
+                  ["+","-","×","÷"].includes(k) ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                  : k === "=" ? "bg-green-500 text-white hover:bg-green-600"
+                  : k === "C" ? "bg-red-100 text-red-600 hover:bg-red-200"
+                  : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-100"
+                }`}
+                onClick={() => {
+                  if (k === "C") { setCalcExpr(""); }
+                  else if (k === "=") {
+                    try {
+                      const expr = calcExpr.replace(/×/g, "*").replace(/÷/g, "/");
+                      const result = Math.round(Function('"use strict"; return (' + expr + ')')());
+                      if (Number.isFinite(result)) {
+                        setInput(String(Math.abs(result)));
+                        setCalcExpr("");
+                        setCalcOpen(false);
+                      }
+                    } catch { /* 不正な式は無視 */ }
+                  }
+                  else { setCalcExpr((p) => p + k); }
+                }}
+              >{k}</button>
+            ))}
+          </div>
+          <p className="text-[9px] text-gray-400 text-center">＝を押すと結果がダメージ欄に入ります</p>
+        </div>
+        </div>
+      )}
       <div className="flex items-center gap-2" ref={ref}>
         <div className="relative flex-1">
           <input
@@ -1965,15 +1969,45 @@ function ReverseDamageSection({ rolls, defenderHp, minDamage, maxDamage }: { rol
             <p className="text-[11px] text-gray-500">該当する補正が見つかりません</p>
           ) : (
             <>
-              <p className="text-[11px] text-gray-500">計算値（{minDamage}〜{maxDamage}）基準：</p>
-              {boosts.map(({ mult, desc }) => (
-                <div key={mult} className="flex items-center justify-between gap-2 text-xs">
-                  <span className="text-purple-800 font-medium">{desc}</span>
-                  <span className="text-[10px] text-gray-500 bg-white border border-purple-200 rounded px-1 py-0.5 font-mono">x{mult.toFixed(2)}</span>
-                </div>
-              ))}
+              <p className="text-[11px] text-gray-500">計算値（{minDamage}〜{maxDamage}）基準：タップで攻撃側EVに反映</p>
+              {boosts.map(({ mult, desc }) => {
+                // この倍率から攻撃側のEV・性格補正を逆算
+                const handleClick = () => {
+                  if (!attackerBaseAtk || !attackStat || !onApplyAtkEv || !rolls.length) return;
+                  // 倍率に含まれる性格補正とアイテム補正を分離
+                  // desc から性格(+)を含むか判定
+                  const hasNaturePlus = desc.includes("性格(+)") || desc.includes("性格補正 (+10%)");
+                  const hasNatureMinus = desc.includes("性格(-)") || desc.includes("性格補正 (-10%)");
+                  const natMod = hasNaturePlus ? 1.1 : hasNatureMinus ? 0.9 : 1.0;
+                  // 性格を除いたアイテム倍率
+                  const itemMult = mult / natMod;
+                  // 受けたダメージからアイテム補正を外した素ダメージ
+                  const baseDmg = num / itemMult;
+                  // 素ダメージ = rolls * (newAtkStat / currentAtkStat) なので
+                  // 必要な攻撃実数値 = currentAtkStat * baseDmg / rollsMid
+                  const rollsMid = (rolls[0] + rolls[rolls.length - 1]) / 2;
+                  if (rollsMid <= 0) return;
+                  const targetAtkStat = Math.round(attackStat * baseDmg / rollsMid);
+                  // 攻撃実数値からEVを逆算（IV=31固定、性格補正natMod）
+                  // stat = floor(floor((base*2+31+floor(ev/4))*lv/100+5) * natMod)
+                  // → ev = (stat/natMod - 5) * 100/lv - base*2 - 31) * 4
+                  const lv = attackerLevel;
+                  const raw = targetAtkStat / natMod;
+                  const ev = Math.round(((raw - 5) * 100 / lv - attackerBaseAtk * 2 - 31) * 4);
+                  const clampedEv = Math.max(0, Math.min(252, Math.round(ev / 4) * 4)); // 4刻みに丸める
+                  onApplyAtkEv(clampedEv, natMod);
+                };
+                return (
+                  <button key={mult} onClick={handleClick}
+                    className="flex items-center justify-between gap-2 text-xs w-full text-left rounded-md px-1.5 py-1 hover:bg-purple-100 active:bg-purple-200 transition-colors cursor-pointer">
+                    <span className="text-purple-800 font-medium">{desc}</span>
+                    <span className="text-[10px] text-gray-500 bg-white border border-purple-200 rounded px-1 py-0.5 font-mono">x{mult.toFixed(2)}</span>
+                  </button>
+                );
+              })}
             </>
           )}
+
         </div>
       )}
     </div>
@@ -2147,6 +2181,7 @@ export default function Home() {
   const [isCritical, setIsCritical] = useState(false);
   const [hitCount, setHitCount] = useState(1);
   const [critCount, setCritCount] = useState(0);
+  const [isPaybackDoubled, setIsPaybackDoubled] = useState(false);
 
   // 2回目の攻撃
   const [showSecondAttack, setShowSecondAttack] = useState(false);
@@ -2416,7 +2451,9 @@ export default function Home() {
   const damageResult = useMemo(() => {
     // finalMove を使用（テラバースト・ダイマックス技変換が解決済み）
     if (!attacker.pokemon || !defender.pokemon || !finalMove || !attackerStats || !defenderStats) return null;
-    if (!finalMove.power) return null;
+    // 体重依存技（ヘビーボンバー・ヒートスタンプ）はpower=nullでも計算続行
+    const isWeightMove = ["heavy-slam", "heat-crash", "grass-knot", "low-kick"].includes(finalMove.name);
+    if (!finalMove.power && !isWeightMove) return null;
     const useStats = megaAttackerStats ?? attackerStats;
     const category = finalMove.category;
     const meta = MOVE_METADATA[effectiveMove?.name ?? ""];
@@ -2464,6 +2501,9 @@ export default function Home() {
       critCount,
       isDefenderFullHp: defenderCurrentHp == null || defenderCurrentHp >= defenderStats.hp,
       isDefenderDynamaxed: defender.isDynamaxed,
+      attackerWeight: attacker.pokemon?.weight,
+      defenderWeight: defender.pokemon?.weight,
+      isPaybackDoubled,
     });
 
     // みがわりシミュレーション
@@ -2510,12 +2550,13 @@ export default function Home() {
     }
 
     return result;
-  }, [attacker, defender, finalMove, effectiveMove, attackerStats, megaAttackerStats, defenderStats, isCritical, weather, terrain, hitCount, critCount, defenderCurrentHp]);
+  }, [attacker, defender, finalMove, effectiveMove, attackerStats, megaAttackerStats, defenderStats, isCritical, weather, terrain, hitCount, critCount, defenderCurrentHp, isPaybackDoubled]);
 
   // 2回目の攻撃のダメージ計算
   const damageResult2 = useMemo(() => {
     if (!showSecondAttack || !selectedMove2 || !attacker.pokemon || !defender.pokemon || !attackerStats || !defenderStats) return null;
-    if (!selectedMove2.power) return null;
+    const isWeightMove2 = ["heavy-slam", "heat-crash", "grass-knot", "low-kick"].includes(selectedMove2.name);
+    if (!selectedMove2.power && !isWeightMove2) return null;
     const useStats = megaAttackerStats ?? attackerStats;
     const category = selectedMove2.category;
     const meta2 = MOVE_METADATA[selectedMove2.name];
@@ -2537,6 +2578,7 @@ export default function Home() {
       isCharged: attacker.isCharged, defenderField: defender.fieldConditions,
       hitCount: hitCount2, critCount: critCount2,
       isDefenderFullHp: false, isDefenderDynamaxed: defender.isDynamaxed,
+      attackerWeight: attacker.pokemon?.weight, defenderWeight: defender.pokemon?.weight,
     });
   }, [showSecondAttack, selectedMove2, attacker, defender, attackerStats, megaAttackerStats, defenderStats, isCritical2, weather, terrain, hitCount2, critCount2]);
 
@@ -2596,8 +2638,8 @@ export default function Home() {
             }}
             className="text-left hover:opacity-80 active:opacity-60 transition-opacity"
           >
-            <h1 className="text-sm sm:text-lg font-bold tracking-tight" style={{ color: "#1a1a1a" }}>ポケモン ダメージ計算機</h1>
-            <p className="text-xs" style={{ color: "#888" }}>Pokémon Champions対応</p>
+            <h1 className="text-base sm:text-xl font-extrabold tracking-tight leading-tight" style={{ color: "#1a1a1a" }}>ポケモン ダメージ計算機</h1>
+            <p className="text-[10px] sm:text-[11px] font-medium tracking-wide" style={{ color: "#aaa" }}>Pokémon Champions対応</p>
           </button>
           <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
             {/* ボックスボタン */}
@@ -2737,6 +2779,10 @@ export default function Home() {
             onWeatherChange={setWeather}
             terrain={terrain}
             onTerrainChange={setTerrain}
+            attackerWeight={attacker.pokemon?.weight}
+            defenderWeight={defender.pokemon?.weight}
+            isPaybackDoubled={isPaybackDoubled}
+            onPaybackDoubledChange={setIsPaybackDoubled}
             secondAttack={{
               show: showSecondAttack,
               onToggle: setShowSecondAttack,
@@ -2770,7 +2816,7 @@ export default function Home() {
                 </button>
               </span>
             ))}
-            <span className="text-[10px] font-semibold text-gray-400 ml-2">場</span>
+            <span className="text-[10px] font-semibold text-gray-400 ml-2">フィールド</span>
             {([
               { value: "none" as TerrainCondition, label: "なし" },
               { value: "electric" as TerrainCondition, label: "エレキ" },
@@ -2807,16 +2853,66 @@ export default function Home() {
               currentHp={defenderCurrentHp}
               onCurrentHpChange={setDefenderCurrentHp}
             />
-            {damageResult && effectiveMove && <ReverseDamageSection rolls={damageResult.rolls} defenderHp={damageResult.defenderHp} minDamage={damageResult.minDamage} maxDamage={damageResult.maxDamage} />}
+            {damageResult && effectiveMove && <ReverseDamageSection
+              rolls={damageResult.rolls} defenderHp={damageResult.defenderHp}
+              minDamage={damageResult.minDamage} maxDamage={damageResult.maxDamage}
+              defenderBaseDef={defender.pokemon ? (effectiveMove.category === "special" ? defender.pokemon.baseStats.spDef : defender.pokemon.baseStats.defense) : undefined}
+              defenderBaseHp={defender.pokemon?.baseStats.hp}
+              defenderLevel={defender.level}
+              defenderNatureMod={(() => { const nd = NATURE_DATA[defender.nature]; const dk = effectiveMove.category === "special" ? "spDef" : "defense"; return nd.boosted === dk ? 1.1 : nd.reduced === dk ? 0.9 : 1; })()}
+              moveCategory={effectiveMove.category}
+              defenseStat={damageResult.defenseStat}
+              onApplyDefEv={(hpEv, defEv) => {
+                const dk = effectiveMove.category === "special" ? "spDef" : "defense";
+                setDefender((prev) => ({ ...prev, evs: { ...prev.evs, hp: hpEv, [dk]: defEv } }));
+              }}
+              attackerBaseAtk={attacker.pokemon ? (effectiveMove.category === "special" ? attacker.pokemon.baseStats.spAtk : attacker.pokemon.baseStats.attack) : undefined}
+              attackerLevel={attacker.level}
+              attackStat={damageResult.attackStat}
+              onApplyAtkEv={(ev, natMod) => {
+                const ak = effectiveMove.category === "special" ? "spAtk" : "attack";
+                setAttacker((prev) => ({ ...prev, evs: { ...prev.evs, [ak]: ev } }));
+                // 性格も反映（natModに合う性格を探す）
+                if (natMod === 1.1) {
+                  // 攻撃up性格に変更
+                  const upNature = Object.entries(NATURE_DATA).find(([, d]) => d.boosted === ak)?.[0];
+                  if (upNature) setAttacker((prev) => ({ ...prev, nature: upNature as Nature }));
+                } else if (natMod === 0.9) {
+                  const downNature = Object.entries(NATURE_DATA).find(([, d]) => d.reduced === ak)?.[0];
+                  if (downNature) setAttacker((prev) => ({ ...prev, nature: downNature as Nature }));
+                } else {
+                  // 補正なし性格（該当ステを上げも下げもしない）
+                  const neutralNature = Object.entries(NATURE_DATA).find(([, d]) => d.boosted !== ak && d.reduced !== ak)?.[0];
+                  if (neutralNature) setAttacker((prev) => ({ ...prev, nature: neutralNature as Nature }));
+                }
+              }}
+            />}
           </div>
           {/* 計算結果 (sticky, xl時3列目 / lg時2列目下に折り返し) */}
-          <div className="lg:col-span-2 xl:col-span-1 xl:sticky xl:top-2 xl:self-start space-y-2">
+          <div className="lg:col-span-2 xl:col-span-1 xl:sticky xl:top-0 xl:self-start space-y-2">
 
         {/* ダメージ結果 */}
         {damageResult && finalMove ? (
           <div className="space-y-2">
-            <h2 className="font-semibold text-gray-700 text-sm px-1">
+            <div className="px-4 py-2 font-bold text-white text-sm rounded-t-lg" style={{ backgroundColor: "#555" }}>
               計算結果 — {attacker.pokemon?.japaneseName} の {finalMove.japaneseName}
+              {/* 体重依存技の威力表示 */}
+              {(finalMove.name === "heavy-slam" || finalMove.name === "heat-crash") && attacker.pokemon?.weight && defender.pokemon?.weight && (
+                <span className="ml-1 text-xs font-normal text-gray-300">
+                  （威力: {(() => {
+                    const r = attacker.pokemon.weight / defender.pokemon.weight;
+                    if (r >= 5) return 120; if (r >= 4) return 100; if (r >= 3) return 80; if (r >= 2) return 60; return 40;
+                  })()}）
+                </span>
+              )}
+              {(finalMove.name === "grass-knot" || finalMove.name === "low-kick") && defender.pokemon?.weight && (
+                <span className="ml-1 text-xs font-normal text-gray-300">
+                  （威力: {(() => {
+                    const kg = defender.pokemon.weight / 10;
+                    if (kg >= 200) return 120; if (kg >= 100) return 100; if (kg >= 50) return 80; if (kg >= 25) return 60; if (kg >= 10) return 40; return 20;
+                  })()}）
+                </span>
+              )}
               {(defender.fieldConditions.lightScreen || defender.fieldConditions.reflect || defender.fieldConditions.auroraVeil) && (
                 <span className="ml-2 text-xs font-normal text-purple-600">
                   {defender.fieldConditions.auroraVeil ? "（オーロラベール中）" :
@@ -2824,7 +2920,7 @@ export default function Home() {
                    defender.fieldConditions.reflect && finalMove?.category === "physical" ? "（リフレクター中）" : ""}
                 </span>
               )}
-            </h2>
+            </div>
             <DamageResultPanel
               result={damageResult}
               stealthRockHp={hazardInfo?.stealthRockHp}
@@ -2834,6 +2930,22 @@ export default function Home() {
               poisonDmg={poisonDmg}
               defenderItem={defender.item}
               hasLeftovers={defender.fieldConditions.leftovers}
+              defenderBaseDefense={defender.pokemon ? (effectiveMove?.category === "special" ? defender.pokemon.baseStats.spDef : defender.pokemon.baseStats.defense) : undefined}
+              defenderBaseHp={defender.pokemon?.baseStats.hp}
+              defenderLevel={defender.level}
+              defenderNatureMod={(() => {
+                const nd = NATURE_DATA[defender.nature];
+                const defKey = effectiveMove?.category === "special" ? "spDef" : "defense";
+                return nd.boosted === defKey ? 1.1 : nd.reduced === defKey ? 0.9 : 1;
+              })()}
+              moveCategory={effectiveMove?.category}
+              onApplyDefEv={(hpEv, defEv) => {
+                const defKey = effectiveMove?.category === "special" ? "spDef" : "defense";
+                setDefender((prev) => ({
+                  ...prev,
+                  evs: { ...prev.evs, hp: hpEv, [defKey]: defEv },
+                }));
+              }}
             />
 
             {/* 2回目の攻撃結果（1回目のダメージ後の残HPで計算） */}
@@ -2959,7 +3071,7 @@ export default function Home() {
               {w.tip && <Tooltip text={w.tip} side="bottom" />}
             </span>
           ))}
-          <span className="text-[10px] font-semibold text-gray-400 ml-2">場</span>
+          <span className="text-[10px] font-semibold text-gray-400 ml-2">フィールド</span>
           {([
             { value: "none" as TerrainCondition, label: "なし", tip: "" },
             { value: "electric" as TerrainCondition, label: "エレキ", tip: "電気技×1.3倍\n地面にいる側がねむり状態にならない" },
@@ -3023,6 +3135,12 @@ interface PanelProps {
   // 防御側 現在HP
   currentHp?: number | null;
   onCurrentHpChange?: (v: number | null) => void;
+  // 体重（ヘビーボンバー威力計算用）
+  attackerWeight?: number;
+  defenderWeight?: number;
+  // しっぺがえし後攻フラグ
+  isPaybackDoubled?: boolean;
+  onPaybackDoubledChange?: (v: boolean) => void;
   // 2回目の攻撃（攻撃側のみ）
   secondAttack?: {
     show: boolean;
@@ -3045,24 +3163,26 @@ function PokemonPanel({
   isCritical, onCriticalChange, hitCount, onHitCountChange, critCount, onCritCountChange,
   onLoadFromBox, registeredMoves,
   weather, onWeatherChange, terrain, onTerrainChange,
-  currentHp, onCurrentHpChange, secondAttack,
+  currentHp, onCurrentHpChange, attackerWeight, defenderWeight,
+  isPaybackDoubled: panelPaybackDoubled, onPaybackDoubledChange, secondAttack,
 }: PanelProps) {
   const { pokemon, level, nature, ivs, evs, teraType, isTerastallized, isDynamaxed, isMegaEvolved, megaForm, isBurned, isCharged, ability, item, fieldConditions } = state;
   const availableMegaForms = pokemon ? getMegaForms(pokemon.name) : [];
 
   // 技のカテゴリに基づいて表示するステータスを決定
   const visibleStats = (() => {
-    if (!selectedMove) return undefined; // 技未選択時は全表示
-    const override = MOVE_METADATA[selectedMove.name]?.statOverride;
     if (showMoveSelector) {
       // 攻撃側
-      if (override === "foul-play") return [] as StatKey[];        // イカサマ: 攻撃側ステータス不要
-      if (override === "body-press") return ["defense"] as StatKey[]; // ボディプレス: 防御のみ
+      if (!selectedMove) return ["attack"] as StatKey[]; // 技未選択時はこうげきのみ
+      const override = MOVE_METADATA[selectedMove.name]?.statOverride;
+      if (override === "foul-play") return [] as StatKey[];
+      if (override === "body-press") return ["defense"] as StatKey[];
       return selectedMove.category === "special"
         ? ["spAtk"] as StatKey[]
         : ["attack"] as StatKey[];
     } else {
-      // 防御側: HP + 対応する防御ステータス
+      // 防御側
+      if (!selectedMove) return ["hp", "defense"] as StatKey[]; // 技未選択時はHP+ぼうぎょ
       return selectedMove.category === "special"
         ? ["hp", "spDef"] as StatKey[]
         : ["hp", "defense"] as StatKey[];
@@ -3081,6 +3201,7 @@ function PokemonPanel({
           onSelect={onPokemonSelect}
           label="ポケモン検索"
           pokemonName={pokemon?.japaneseName ?? ""}
+          placeholder={showMoveSelector ? "クリックして攻撃するポケモンを選択" : "クリックして防御するポケモンを選択"}
           onBoxSelect={onLoadFromBox}
         />
 
@@ -3137,6 +3258,10 @@ function PokemonPanel({
                   onWeatherChange={onWeatherChange ?? (() => {})}
                   terrain={terrain ?? "none"}
                   onTerrainChange={onTerrainChange ?? (() => {})}
+                  attackerWeight={attackerWeight}
+                  defenderWeight={defenderWeight}
+                  isPaybackDoubled={panelPaybackDoubled}
+                  onPaybackDoubledChange={onPaybackDoubledChange}
                 />
               </div>
             )}
@@ -3301,6 +3426,8 @@ function PokemonPanel({
                       onWeatherChange={onWeatherChange ?? (() => {})}
                       terrain={terrain ?? "none"}
                       onTerrainChange={onTerrainChange ?? (() => {})}
+                      attackerWeight={attackerWeight}
+                      defenderWeight={defenderWeight}
                     />
                   </div>
                 )}

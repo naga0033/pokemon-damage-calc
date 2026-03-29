@@ -381,6 +381,7 @@ export async function fetchPokemon(nameOrId: string | number): Promise<PokemonDa
     spriteUrl,
     moveNames: finalMoveNames,
     abilities,
+    weight: poke.weight ?? undefined, // PokeAPIの体重（ヘクトグラム単位）
   };
 }
 

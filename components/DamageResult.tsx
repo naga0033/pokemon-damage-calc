@@ -8,12 +8,12 @@ const REVERSE_CANDIDATES: Array<{ mult: number; desc: string }> = [
   { mult: 0.9,  desc: "性格補正 (-10%)" },
   { mult: 1.0,  desc: "補正なし（計算通り）" },
   { mult: 1.1,  desc: "性格補正 (+10%)" },
-  { mult: 1.2,  desc: "タイプ強化アイテム / たつじんのおび" },
+  { mult: 1.2,  desc: "タイプ強化系アイテム" },
   { mult: 1.3,  desc: "いのちのたま" },
-  { mult: 1.32, desc: "性格(+) × たつじんのおび" },
+  { mult: 1.32, desc: "性格(+) × タイプ強化系" },
   { mult: 1.35, desc: "性格(-) × こだわり" },
   { mult: 1.43, desc: "性格(+) × いのちのたま" },
-  { mult: 1.5,  desc: "こだわりハチマキ / メガネ / ごりむちゅう" },
+  { mult: 1.5,  desc: "こだわりハチマキ / メガネ" },
   { mult: 1.65, desc: "性格(+) × こだわり" },
 ];
 
@@ -38,6 +38,13 @@ interface Props {
   poisonDmg?: number;       // 毒/猛毒によるスリップダメージ
   defenderItem?: string;    // 防御側の持ち物slug（たべのこし判定用）
   hasLeftovers?: boolean;   // たべのこしチェックボックス（fieldConditions経由）
+  // 防御側EV逆算用
+  defenderBaseDefense?: number;  // 防御側の種族値（ぼうぎょorとくぼう）
+  defenderBaseHp?: number;       // 防御側のHP種族値
+  defenderLevel?: number;        // 防御側のレベル
+  defenderNatureMod?: number;    // 防御側の性格補正（1.1/1.0/0.9）
+  moveCategory?: "physical" | "special" | "status"; // 技の分類
+  onApplyDefEv?: (hpEv: number, defEv: number) => void; // EV適用コールバック
 }
 
 const EFF_LABEL: Record<number, { label: string; color: string }> = {
@@ -131,7 +138,7 @@ function getHazardKoLabel(rolls: number[], hp: number, hazardDmg: number): strin
   return "7発以上";
 }
 
-export default function DamageResultPanel({ result, stealthRockHp, spikesHp, currentHp, hideReverseCalc, poisonDmg = 0, defenderItem, hasLeftovers }: Props) {
+export default function DamageResultPanel({ result, stealthRockHp, spikesHp, currentHp, hideReverseCalc, poisonDmg = 0, defenderItem, hasLeftovers, defenderBaseDefense, defenderBaseHp, defenderLevel = 50, defenderNatureMod = 1, moveCategory, onApplyDefEv }: Props) {
   const { minDamage: rawMinDamage, maxDamage: rawMaxDamage, koLabel, typeEffectiveness, defenderHp, rolls } = result;
   // たべのこし回復量（ON時のみ）
   const isLeftoversActive = hasLeftovers || defenderItem === "leftovers" || defenderItem === "black-sludge";
@@ -456,7 +463,7 @@ export default function DamageResultPanel({ result, stealthRockHp, spikesHp, cur
 
             {/* 逆算ツール */}
             {!hideReverseCalc && (<div className="border-t pt-3 space-y-2">
-              <p className="text-xs font-medium text-gray-600">受けたダメージから逆算</p>
+              <p className="text-xs font-medium text-gray-600">受けたダメージから相手の型を予測</p>
               <div className="flex items-center gap-2">
                 <div className="relative flex-1" ref={numpadRef}>
                   <input
@@ -547,6 +554,7 @@ export default function DamageResultPanel({ result, stealthRockHp, spikesHp, cur
                   )}
                 </div>
               )}
+
             </div>)}
 
             {/* 設置技ダメージ */}

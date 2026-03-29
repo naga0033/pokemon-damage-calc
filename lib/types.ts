@@ -34,6 +34,7 @@ export interface PokemonData {
   spriteUrl: string;
   moveNames: string[]; // English slugs
   abilities: AbilityEntry[];
+  weight?: number;     // 体重（kg×10。PokeAPIの単位はヘクトグラム）
 }
 
 export interface MoveData {
