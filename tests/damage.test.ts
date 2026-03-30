@@ -224,6 +224,36 @@ test("freeze-dry special case also works when move name is passed in Japanese", 
   assert.equal(result.typeEffectiveness, 2);
 });
 
+test("stellar tera blast becomes super effective against terastallized defenders", () => {
+  const move = baseMove({
+    name: "tera-blast",
+    japaneseName: "テラバースト",
+    type: "stellar",
+    power: 80,
+  });
+  const versusTerastallized = calcDamage(createInput(move, {
+    attackerTypes: ["dragon", "flying"] as PokemonType[],
+    defenderTypes: ["water"] as PokemonType[],
+    attackerTeraType: "stellar",
+    isTerastallized: true,
+    defenderTeraType: "fire",
+    defenderTerastallized: true,
+  }));
+  const versusNormal = calcDamage(createInput(move, {
+    attackerTypes: ["dragon", "flying"] as PokemonType[],
+    defenderTypes: ["water"] as PokemonType[],
+    attackerTeraType: "stellar",
+    isTerastallized: true,
+    defenderTeraType: null,
+    defenderTerastallized: false,
+  }));
+
+  assert.equal(versusTerastallized.typeEffectiveness, 2);
+  assert.equal(versusNormal.typeEffectiveness, 1);
+  assert.equal(versusTerastallized.modifiers?.some((modifier) => modifier.label === "ステラテラバースト"), true);
+  assert.ok(versusTerastallized.maxDamage > versusNormal.maxDamage);
+});
+
 test("thousand arrows hits flying and levitate targets", () => {
   const move = baseMove({
     name: "thousand-arrows",

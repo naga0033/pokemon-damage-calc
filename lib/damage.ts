@@ -168,6 +168,11 @@ export function calcDamage(input: DamageInput): DamageResult {
   // タイプ相性
   let typeEff = getTypeEffectiveness(effectiveMoveType, effectiveDefTypes);
 
+  if (move.name === "tera-blast" && isTerastallized && attackerTeraType === "stellar" && defenderTerastallized) {
+    typeEff *= 2;
+    modifiers.push({ label: "ステラテラバースト", value: 2, detail: "テラスタル相手に抜群" });
+  }
+
   if (moveMatches(move, "freeze-dry", "フリーズドライ") && effectiveDefTypes.includes("water")) {
     typeEff *= 4;
     modifiers.push({ label: "フリーズドライ", value: 2, detail: "みずタイプへ最終的に抜群" });
