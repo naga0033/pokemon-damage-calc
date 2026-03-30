@@ -14,6 +14,7 @@ export interface MegaForm {
 }
 
 const S = (id: number) => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`;
+const SHOWDOWN = (name: string) => `https://play.pokemonshowdown.com/sprites/gen5/${name}.png`;
 
 export const MEGA_FORMS: MegaForm[] = [
   // --- カントー ---
@@ -200,7 +201,7 @@ export const MEGA_FORMS: MegaForm[] = [
     ability: "", abilityJa: "", megaStone: "starmiite", megaStoneJa: "スターミーナイト", spriteUrl: "" },
   { slug: "dragonite-mega", baseSlug: "dragonite", jaName: "メガカイリュー",
     types: ["dragon", "flying"], baseStats: { hp: 91, attack: 124, defense: 115, spAtk: 145, spDef: 125, speed: 100 },
-    ability: "multiscale", abilityJa: "マルチスケイル", megaStone: "dragonitite", megaStoneJa: "カイリューナイト", spriteUrl: "" },
+    ability: "multiscale", abilityJa: "マルチスケイル", megaStone: "dragonitite", megaStoneJa: "カイリューナイト", spriteUrl: SHOWDOWN("dragonite-mega") },
   { slug: "emboar-mega", baseSlug: "emboar", jaName: "メガエンブオー",
     types: ["fire", "fighting"], baseStats: { hp: 110, attack: 148, defense: 75, spAtk: 110, spDef: 110, speed: 75 },
     ability: "mold-breaker", abilityJa: "かたやぶり", megaStone: "emboarite", megaStoneJa: "エンブオーナイト", spriteUrl: "" },
