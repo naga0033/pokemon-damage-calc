@@ -3682,6 +3682,20 @@ export default function Home() {
       <footer className="text-center py-6 px-4 space-y-2" style={{ color: "#888" }}>
         <p className="text-xs">ポケモンデータ: PokéAPI | 画像認識: Claude API (Anthropic)</p>
         <p className="text-xs">このサイトはポケモン対戦向けの非公式ファンツールです。</p>
+        <p className="text-xs">
+          不具合報告・ご要望は
+          {" "}
+          <a
+            href="https://x.com/poketool2"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sky-600 hover:text-sky-700 underline underline-offset-2"
+          >
+            X @poketool2
+          </a>
+          {" "}
+          までお願いします。
+        </p>
         <p className="text-xs leading-relaxed">
           当サイトは任天堂、株式会社ポケモン及び関係各社とは一切関係ありません。<br />
           ポケットモンスター・ポケモン・Pokémonは任天堂・クリーチャーズ・ゲームフリークの登録商標です。
