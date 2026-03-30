@@ -120,6 +120,7 @@ export interface DamageResult {
   defenseStat: number;
   defenderHp: number;
   rolls: number[];
+  modifiers?: DamageModifier[];
   /** 連続技: 1回あたりのダメージ (min-max) */
   perHit?: { min: number; max: number };
   /** 連続技のヒット数 */
@@ -132,4 +133,10 @@ export interface DamageResult {
     bodyDamageMax: number;  // みがわり破壊後の本体ダメージ(最大)
     bypassed: boolean;      // 音系/すりぬけで貫通したか
   };
+}
+
+export interface DamageModifier {
+  label: string;
+  value: number;
+  detail?: string;
 }

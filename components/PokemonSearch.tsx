@@ -19,6 +19,8 @@ interface Props {
   pokemonName?: string;
   placeholder?: string;
   onBoxSelect?: (state: PokemonState, moves?: string[]) => void;
+  boxEntries?: BoxEntry[];
+  teams?: BattleTeam[];
 }
 
 interface SearchResult {
@@ -28,7 +30,7 @@ interface SearchResult {
   boxEntry?: BoxEntry;
 }
 
-export default function PokemonSearch({ onSelect, label, pokemonName, placeholder, onBoxSelect }: Props) {
+export default function PokemonSearch({ onSelect, label, pokemonName, placeholder, onBoxSelect, boxEntries: boxEntriesProp, teams: teamsProp }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -59,6 +61,14 @@ export default function PokemonSearch({ onSelect, label, pokemonName, placeholde
       setShowRanking(false);
     }
   }, [pokemonName]);
+
+  useEffect(() => {
+    if (boxEntriesProp) setBoxEntries(boxEntriesProp);
+  }, [boxEntriesProp]);
+
+  useEffect(() => {
+    if (teamsProp) setTeams(teamsProp);
+  }, [teamsProp]);
 
   // 検索ドロップダウンの外側クリックで閉じる
   // ※ カナキーボードパネル内のクリックは除外（インクリメンタルサーチを維持）
@@ -128,8 +138,8 @@ export default function PokemonSearch({ onSelect, label, pokemonName, placeholde
     setShowRanking(true);
     setOpen(true);
     setFocusedIndex(-1);
-    setBoxEntries(loadBox());
-    setTeams(loadTeams());
+    setBoxEntries(boxEntriesProp ?? loadBox());
+    setTeams(teamsProp ?? loadTeams());
   }, [query]);
 
   const handleSelect = useCallback(async (entry: SearchResult) => {
@@ -167,13 +177,12 @@ export default function PokemonSearch({ onSelect, label, pokemonName, placeholde
 
   // 登録ポケモンボタンをクリック
   const handleBoxBtnClick = useCallback(() => {
-    const fresh = loadBox();
-    setBoxEntries(fresh);
-    setTeams(loadTeams());
+    setBoxEntries(boxEntriesProp ?? loadBox());
+    setTeams(teamsProp ?? loadTeams());
     setBoxPanelOpen((prev) => !prev);
     setOpen(false);
     setShowRanking(false);
-  }, []);
+  }, [boxEntriesProp, teamsProp]);
 
   const rankingList: SearchResult[] = USAGE_RANKING.map((r) => ({ name: r.name, ja: r.ja, id: r.id }));
   const rankingNames = new Set(USAGE_RANKING.map((r) => r.name));
@@ -398,7 +407,7 @@ export default function PokemonSearch({ onSelect, label, pokemonName, placeholde
           onChange={(e) => handleChange(e.target.value)}
           onFocus={handleFocus}
           onKeyDown={handleKeyDown}
-          placeholder={placeholder ?? "クリックしてポケモンを選んでね"}
+          placeholder={placeholder ?? "クリックして登録するポケモンを選択"}
           className="w-full min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 pr-16"
         />
         {/* カタカナキーボード トグルボタン */}

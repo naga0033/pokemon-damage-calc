@@ -14,6 +14,8 @@ export interface MoveMeta {
   alwaysCrit?: boolean;
   /** 特殊参照: "body-press" = 自分のB参照, "foul-play" = 相手のA参照 */
   statOverride?: "body-press" | "foul-play";
+  /** 防御側参照先の上書き */
+  defenseStatOverride?: "defense";
   /** 音系技フラグ（みがわり貫通） */
   isSound?: boolean;
 }
@@ -603,7 +605,7 @@ export const MOVE_METADATA: Record<string, MoveMeta> = {
   "rock-smash": { type: "fighting", power: 40, category: "physical" },
   "rolling-kick": { type: "fighting", power: 60, category: "physical" },
   "sacred-sword": { type: "fighting", power: 90, category: "physical" },
-  "secret-sword": { type: "fighting", power: 85, category: "special" },
+  "secret-sword": { type: "fighting", power: 85, category: "special", defenseStatOverride: "defense" },
   "seismic-toss": { type: "fighting", power: null, category: "physical" },
   "sky-uppercut": { type: "fighting", power: 85, category: "physical" },
   "storm-throw": { type: "fighting", power: 60, category: "physical", alwaysCrit: true },
@@ -774,8 +776,8 @@ export const MOVE_METADATA: Record<string, MoveMeta> = {
   "psycho-cut": { type: "psychic", power: 70, category: "physical" },
   "psycho-shift": { type: "psychic", power: null, category: "status" },
   "psyshield-bash": { type: "psychic", power: 70, category: "physical" },
-  "psyshock": { type: "psychic", power: 80, category: "special" },
-  "psystrike": { type: "psychic", power: 100, category: "special" },
+  "psyshock": { type: "psychic", power: 80, category: "special", defenseStatOverride: "defense" },
+  "psystrike": { type: "psychic", power: 100, category: "special", defenseStatOverride: "defense" },
   "psywave": { type: "psychic", power: null, category: "special" },
   "reflect": { type: "psychic", power: null, category: "status" },
   "rest": { type: "psychic", power: null, category: "status" },

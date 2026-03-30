@@ -6,6 +6,10 @@ export const metadata: Metadata = {
   title: "ポケモン ダメージ計算機 | ポケモンチャンピオンズ対応",
   description: "ポケモンチャンピオンズ対応のダメージ計算ツール。テラスタル、タイプ相性、個体値・努力値に対応。",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/icon.svg",
+    apple: "/icon-192.png",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
@@ -25,6 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="ja" translate="no">
       <head>
+        <link rel="icon" href="/icon.svg" type="image/svg+xml" />
         <link rel="apple-touch-icon" href="/icon-192.png" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="google" content="notranslate" />

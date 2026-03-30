@@ -235,8 +235,8 @@ const FORM_JAPANESE_NAMES: Record<string, string> = {
   "ogerpon-wellspring":        "オーガポン（水）",
   "ogerpon-hearthflame":       "オーガポン（炎）",
   "ogerpon-cornerstone":       "オーガポン（岩）",
-  // ウーサルナ
-  "ursaluna-bloodmoon":        "ウーサルナ（血月）",
+  // ガチグマ(あかつき)
+  "ursaluna-bloodmoon":        "ガチグマ(あかつき)",
   // テツノ系（未来のパラドックス）
   "iron-leaves":               "テツノイサハ",
   "iron-crown":                "テツノカシラ",

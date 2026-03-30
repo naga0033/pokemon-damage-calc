@@ -1,9 +1,12 @@
 # ルール
-- 作業が完了したら必ず以下のコマンドでMacに通知+通知音を鳴らすこと
-  osascript -e 'display notification "作業が完了しました" with title "Claude Code" sound name "Glass"'
+- 作業が完了したら、またはエラーで止まったら必ず以下の2つを実行すること
+  1. osascript -e 'display notification "作業が完了しました" with title "Claude Code" sound name "Glass"'
+  2. afplay /System/Library/Sounds/Glass.aiff
 - コメントは日本語で書くこと
 - 実装完了後は必ず以下を確認してから完了報告すること
   1. `npm run build` でビルドエラーがないことを確認
   2. 開発サーバーを起動して実際にブラウザでアクセスして動作確認
   3. 主要な機能（ポケモン検索・ダメージ計算）が正常に動くことを確認
   4. エラーが出た場合は自分で修正してから完了報告する
+- 作業開始前のgitコミットは不要。指示された作業だけを実行すること
+- レートリミットで止まった場合、ユーザーが「続けて」と言ったら作業を再開すること

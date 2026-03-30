@@ -2,6 +2,8 @@
  * 英語slug → 日本語名 の静的マッピング
  * PokeAPIのfetchを減らすためのキャッシュ
  */
+import { findBestJaMatch, normalizeJaText } from "./japanese-match";
+
 export const EN_TO_JA: Record<string, string> = {
   // Gen 1
   bulbasaur: "フシギダネ", ivysaur: "フシギソウ", venusaur: "フシギバナ",
@@ -623,24 +625,68 @@ const FORM_ALIAS: Record<string, string> = {
   "オリジン": "オリジン", "アナザー": "アナザー",
 };
 
-/** 日本語名から英語slugを取得（完全一致→フォーム名正規化→部分一致） */
-export function getEnSlug(jaName: string): string | null {
-  // 1. 完全一致
-  if (JA_TO_EN[jaName]) return JA_TO_EN[jaName];
+const POKEMON_ALIAS: Record<string, string> = {
+  "黒バド": "バドレックス(こくばじょう)",
+  "黒バドレックス": "バドレックス(こくばじょう)",
+  "黒馬バドレックス": "バドレックス(こくばじょう)",
+  "白バド": "バドレックス(はくばじょう)",
+  "白バドレックス": "バドレックス(はくばじょう)",
+  "白馬バドレックス": "バドレックス(はくばじょう)",
+  "連撃ウーラオス": "ウーラオス(れんげき)",
+  "一撃ウーラオス": "ウーラオス(いちげき)",
+  "水オーガポン": "オーガポン(水)",
+  "炎オーガポン": "オーガポン(炎)",
+  "岩オーガポン": "オーガポン(岩)",
+};
 
-  // 2. フォーム名の漢字→ひらがな変換して再検索
-  let normalized = jaName;
+function normalizePokemonAlias(jaName: string): string {
+  let normalized = jaName.trim().replace(/（/g, "(").replace(/）/g, ")");
+  normalized = POKEMON_ALIAS[normalized] ?? normalized;
   for (const [kanji, hira] of Object.entries(FORM_ALIAS)) {
     normalized = normalized.replace(kanji, hira);
   }
-  // 括弧の正規化: 全角→半角
-  normalized = normalized.replace(/（/g, "(").replace(/）/g, ")");
+  return POKEMON_ALIAS[normalized] ?? normalized;
+}
+
+export function resolvePokemonJaName(input: string): string | null {
+  const cleaned = normalizePokemonAlias(
+    input
+      .replace(/^[■□◆◇●○・•◦▪︎▸▶︎>]+/, "")
+      .replace(/^(ポケモン|名前)[:：]/, "")
+      .trim()
+  ).replace(/\s/g, "");
+
+  if (!cleaned) return null;
+  if (JA_TO_EN[cleaned]) return EN_TO_JA[JA_TO_EN[cleaned]] ?? cleaned;
+
+  const normalized = normalizeJaText(cleaned);
+  if (normalized.length < 3) return null;
+
+  const candidates = Object.values(EN_TO_JA);
+  const exact = candidates.find((candidate) => normalizeJaText(candidate) === normalized);
+  if (exact) return exact;
+
+  return findBestJaMatch(cleaned, candidates, {
+    maxDistance: normalized.length >= 6 ? 3 : 2,
+  });
+}
+
+/** 日本語名から英語slugを取得（完全一致→フォーム名正規化→部分一致） */
+export function getEnSlug(jaName: string): string | null {
+  const aliasNormalized = normalizePokemonAlias(jaName);
+
+  // 1. 完全一致
+  if (JA_TO_EN[jaName]) return JA_TO_EN[jaName];
+  if (JA_TO_EN[aliasNormalized]) return JA_TO_EN[aliasNormalized];
+
+  // 2. フォーム名の漢字→ひらがな変換して再検索
+  let normalized = aliasNormalized;
   if (JA_TO_EN[normalized]) return JA_TO_EN[normalized];
 
   // 3. 「霊獣ランドロス」→「ランドロス(れいじゅう)」形式に変換
   for (const [kanji, hira] of Object.entries(FORM_ALIAS)) {
-    if (jaName.startsWith(kanji)) {
-      const baseName = jaName.slice(kanji.length);
+    if (aliasNormalized.startsWith(kanji)) {
+      const baseName = aliasNormalized.slice(kanji.length);
       const withForm = `${baseName}(${hira})`;
       if (JA_TO_EN[withForm]) return JA_TO_EN[withForm];
     }
@@ -648,7 +694,7 @@ export function getEnSlug(jaName: string): string | null {
 
   // 4. 部分一致（「ランドロス」で「landorus」を見つける）
   for (const [ja, en] of Object.entries(JA_TO_EN)) {
-    if (ja === jaName || ja.startsWith(jaName)) return en;
+    if (ja === aliasNormalized || ja.startsWith(aliasNormalized)) return en;
   }
 
   return null;
@@ -657,11 +703,7 @@ export function getEnSlug(jaName: string): string | null {
 /** 日本語名からフォーム違いを含む候補一覧を取得 */
 export function findPokemonCandidates(jaName: string): Array<{ name: string; ja: string }> {
   // フォーム名変換
-  let searchName = jaName;
-  for (const [kanji, hira] of Object.entries(FORM_ALIAS)) {
-    searchName = searchName.replace(kanji, hira);
-  }
-  searchName = searchName.replace(/（/g, "(").replace(/）/g, ")");
+  const searchName = normalizePokemonAlias(jaName);
 
   // ベース名を抽出（括弧やフォーム名を除去）
   const baseName = searchName.replace(/\(.*?\)/, "").replace(/^(れいじゅう|けしん|あかつき|くろうま|しろうま|れんげき|いちげき)/, "");

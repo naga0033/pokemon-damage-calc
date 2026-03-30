@@ -479,8 +479,8 @@ export const MOVE_NAMES_JA: Record<string, string> = {
   "swords-dance": "つるぎのまい",
   "metal-sound": "メタルサウンド",
   "double-iron-bash": "ダブルアイアンバッシュ",
-  "behemoth-blade": "ダイオウのつるぎ",
-  "behemoth-bash": "ダイオウのたて",
+  "behemoth-blade": "きょじゅうざん",
+  "behemoth-bash": "きょじゅうだん",
   "gyro-ball": "ジャイロボール",
   "anchor-shot": "いかりのつな",
 

@@ -1,7 +1,10 @@
 "use client";
-import { useState, useMemo, useRef, useEffect } from "react";
-import type { DamageResult } from "@/lib/types";
+import { useState, useMemo } from "react";
+import type { DamageResult, PokemonType, TerrainCondition, WeatherCondition } from "@/lib/types";
 import { getKoLabelWithLeftovers } from "@/lib/damage";
+import { ABILITY_NAMES_JA } from "@/lib/ability-names";
+import { ITEM_MAP } from "@/lib/items";
+import { TYPE_NAMES_JA } from "@/lib/type-chart";
 
 /** 逆算用: 受けたダメージから考えられる攻撃側の補正を推定 */
 const REVERSE_CANDIDATES: Array<{ mult: number; desc: string }> = [
@@ -28,6 +31,43 @@ function inferBoosts(received: number, rolls: number[]): Array<{ mult: number; d
 }
 
 export { inferBoosts, REVERSE_CANDIDATES };
+
+const WEATHER_LABELS: Record<WeatherCondition, string> = {
+  none: "なし",
+  sun: "晴れ",
+  rain: "雨",
+  sand: "砂嵐",
+  snow: "雪",
+};
+
+const TERRAIN_LABELS: Record<TerrainCondition, string> = {
+  none: "なし",
+  electric: "エレキ",
+  grassy: "グラス",
+  misty: "ミスト",
+  psychic: "サイコ",
+};
+
+const MODIFIER_DETAIL_LABELS: Record<string, string> = {
+  ...ABILITY_NAMES_JA,
+  ...Object.fromEntries(Object.entries(ITEM_MAP).filter(([slug]) => Boolean(slug)).map(([slug, item]) => [slug, item.ja])),
+  ...Object.fromEntries(Object.entries(TYPE_NAMES_JA).map(([slug, ja]) => [slug, ja])),
+  ...WEATHER_LABELS,
+  ...TERRAIN_LABELS,
+};
+
+const MODIFIER_DETAIL_KEYS = Object.keys(MODIFIER_DETAIL_LABELS).filter(Boolean).sort((a, b) => b.length - a.length);
+
+function formatModifierDetail(detail?: string): string | undefined {
+  if (!detail) return detail;
+
+  let translated = detail;
+  for (const key of MODIFIER_DETAIL_KEYS) {
+    translated = translated.split(key).join(MODIFIER_DETAIL_LABELS[key]);
+  }
+
+  return translated.replace(/\s*->\s*/g, " → ");
+}
 
 interface Props {
   result: DamageResult;
@@ -73,41 +113,6 @@ function rollColor(damage: number, hp: number): string {
   return "bg-blue-100 text-gray-700";
 }
 
-function NumpadPopup({ value, onDigit, onClear, onClose, pos }: {
-  value: string;
-  onDigit: (d: string) => void;
-  onClear: () => void;
-  onClose: () => void;
-  pos?: { top: number; left: number };
-}) {
-  const base = "flex items-center justify-center rounded-lg border font-semibold text-sm transition-colors select-none h-9 cursor-pointer";
-  const md = (fn: () => void) => (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); fn(); };
-  const style: React.CSSProperties = pos
-    ? { position: "fixed", top: pos.top, left: pos.left, transform: "translateX(-50%)", zIndex: 9999 }
-    : {};
-  const divClass = pos
-    ? "bg-white border border-gray-300 rounded-xl shadow-2xl p-2.5 w-44"
-    : "absolute z-[200] bg-white border border-gray-300 rounded-xl shadow-2xl p-2.5 w-44 bottom-full mb-1 left-1/2 -translate-x-1/2";
-  return (
-    <div className={divClass} style={style}>
-      <div className="text-center text-lg font-bold text-gray-800 bg-gray-50 border border-gray-100 rounded-lg px-2 py-1 mb-2 min-h-[2.25rem]">
-        {value !== "" ? value : <span className="text-gray-300 text-sm">入力してください</span>}
-      </div>
-      <div className="grid grid-cols-3 gap-1 mb-1">
-        {[7, 8, 9, 4, 5, 6, 1, 2, 3].map((d) => (
-          <button key={d} className={`${base} border-gray-200 bg-white hover:bg-gray-100`} onMouseDown={md(() => onDigit(String(d)))}>{d}</button>
-        ))}
-        <button className={`${base} border-gray-200 bg-white hover:bg-gray-100`} onMouseDown={md(() => onDigit("0"))}>0</button>
-        <button className={`${base} col-span-2 border-red-200 bg-red-50 text-red-600 hover:bg-red-100`} onMouseDown={md(onClear)}>CLR</button>
-      </div>
-      <button
-        className="w-full py-1.5 rounded-lg border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 text-sm font-semibold transition-colors"
-        onMouseDown={md(onClose)}
-      >確定</button>
-    </div>
-  );
-}
-
 /** rolls と HP から確定数ラベルを計算（damage.ts の getKoLabel と同等） */
 function computeKoLabel(rolls: number[], hp: number): string {
   for (let n = 1; n <= 6; n++) {
@@ -140,6 +145,7 @@ function getHazardKoLabel(rolls: number[], hp: number, hazardDmg: number): strin
 
 export default function DamageResultPanel({ result, stealthRockHp, spikesHp, currentHp, hideReverseCalc, poisonDmg = 0, defenderItem, hasLeftovers, defenderBaseDefense, defenderBaseHp, defenderLevel = 50, defenderNatureMod = 1, moveCategory, onApplyDefEv }: Props) {
   const { minDamage: rawMinDamage, maxDamage: rawMaxDamage, koLabel, typeEffectiveness, defenderHp, rolls } = result;
+  const activeModifiers = (result.modifiers ?? []).filter((modifier) => modifier.value !== 1);
   // たべのこし回復量（ON時のみ）
   const isLeftoversActive = hasLeftovers || defenderItem === "leftovers" || defenderItem === "black-sludge";
   const leftoversRecovery = isLeftoversActive ? Math.floor(defenderHp / 16) : 0;
@@ -157,20 +163,6 @@ export default function DamageResultPanel({ result, stealthRockHp, spikesHp, cur
     ? computeKoLabel(rolls, effectiveHp)
     : koLabel;
   const [receivedInput, setReceivedInput] = useState("");
-  const [numpadOpen, setNumpadOpen] = useState(false);
-  const [numpadPos, setNumpadPos] = useState<{ top: number; left: number } | null>(null);
-  const numpadRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!numpadOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (numpadRef.current && !numpadRef.current.contains(e.target as Node)) {
-        setNumpadOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [numpadOpen]);
 
   const effInfo = EFF_LABEL[typeEffectiveness] ?? { label: `×${typeEffectiveness}`, color: "bg-gray-50 text-gray-600" };
 
@@ -461,71 +453,50 @@ export default function DamageResultPanel({ result, stealthRockHp, spikesHp, cur
               </div>
             </div>
 
+            {/* 適用補正 */}
+            {activeModifiers.length > 0 && (
+              <div className="border-t pt-3 space-y-2">
+                <p className="text-xs font-semibold text-gray-600">適用された補正</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {activeModifiers.map((modifier, index) => (
+                    <span
+                      key={`${modifier.label}-${modifier.detail ?? ""}-${index}`}
+                      className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-700"
+                      title={formatModifierDetail(modifier.detail)}
+                    >
+                      <span className="font-semibold">{modifier.label}</span>
+                      <span className={`font-mono ${modifier.value > 1 ? "text-red-600" : modifier.value < 1 ? "text-blue-600" : "text-gray-500"}`}>
+                        ×{modifier.value.toFixed(2)}
+                      </span>
+                      {modifier.detail && <span className="text-slate-400">{formatModifierDetail(modifier.detail)}</span>}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* 逆算ツール */}
             {!hideReverseCalc && (<div className="border-t pt-3 space-y-2">
               <p className="text-xs font-medium text-gray-600">受けたダメージから相手の型を予測</p>
               <div className="flex items-center gap-2">
-                <div className="relative flex-1" ref={numpadRef}>
+                <div className="relative flex-1">
                   <input
                     type="text"
                     inputMode="numeric"
                     pattern="[0-9]*"
-                    readOnly={numpadOpen}
-                    className={`w-full border rounded-lg px-3 py-1.5 text-sm text-left transition-colors focus:outline-none ${
-                      numpadOpen
-                        ? "border-purple-400 ring-2 ring-purple-200 bg-purple-50 text-purple-900"
-                        : "border-gray-300 hover:border-purple-300 text-gray-700 bg-white"
-                    }`}
+                    autoComplete="off"
+                    className="w-full border rounded-lg px-3 py-1.5 text-sm text-left transition-colors focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-200 border-gray-300 hover:border-purple-300 text-gray-700 bg-white"
                     value={receivedInput}
-                    onChange={(e) => setReceivedInput(e.target.value.replace(/[^0-9]/g, "").slice(0, 4))}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/[^0-9]/g, "");
+                      let v = digits;
+                      const n = parseInt(v, 10);
+                      if (!isNaN(n) && n > 9999) v = "9999";
+                      else if (v.length > 4) v = v.slice(0, 4);
+                      setReceivedInput(v);
+                    }}
                     placeholder="受けたダメージ数値を入力"
-                    onClick={(e) => {
-                      if (!numpadOpen) {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        const viewH = window.innerHeight;
-                        // テンキーが入力欄を隠さないよう、上方向に表示
-                        setNumpadPos({ top: Math.min(rect.bottom + 6, viewH - 260), left: rect.left + rect.width / 2 });
-                        setReceivedInput("");
-                        setNumpadOpen(true);
-                      }
-                    }}
-                    onKeyDown={(e) => {
-                      // 物理キーボードからの数字入力（0ベース）
-                      if (/^[0-9]$/.test(e.key)) {
-                        e.preventDefault();
-                        setReceivedInput((prev) => {
-                          // numpadが開いた直後（空文字）ならそのまま、それ以外は追記
-                          const next = prev + e.key;
-                          const num = parseInt(next, 10);
-                          if (isNaN(num) || num > 9999) return prev;
-                          return next;
-                        });
-                      } else if (e.key === "Backspace") {
-                        e.preventDefault();
-                        setReceivedInput((prev) => prev.slice(0, -1));
-                      } else if (e.key === "Escape" || e.key === "Enter") {
-                        e.preventDefault();
-                        setNumpadOpen(false);
-                        (e.target as HTMLInputElement).blur();
-                      }
-                    }}
                   />
-                  {numpadOpen && (
-                    <NumpadPopup
-                      value={receivedInput}
-                      onDigit={(d) => {
-                        setReceivedInput((prev) => {
-                          const next = prev + d;
-                          const num = parseInt(next, 10);
-                          if (isNaN(num) || num > 9999) return prev;
-                          return next;
-                        });
-                      }}
-                      onClear={() => setReceivedInput("")}
-                      onClose={() => setNumpadOpen(false)}
-                      pos={numpadPos ?? undefined}
-                    />
-                  )}
                 </div>
                 {receivedPct && (
                   <span className="text-sm font-medium text-gray-600 whitespace-nowrap">= {receivedPct}</span>

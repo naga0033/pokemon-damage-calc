@@ -1,11 +1,13 @@
 // サービスワーカー: キャッシュ戦略（Network First + Cache Fallback）
-const CACHE_NAME = "pokemon-dmg-calc-v1";
+// ※ /_next/ は絶対にキャッシュしない（チャンクと HTML の組み合わせがずれると
+//   Webpack が TypeError: Cannot read properties of undefined (reading 'call') を出す）
+const CACHE_NAME = "pokemon-dmg-calc-v3";
 
 // インストール時にシェルをキャッシュ
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) =>
-      cache.addAll(["/", "/manifest.json", "/icon-192.png", "/icon-512.png"])
+      cache.addAll(["/manifest.json", "/icon-192.png", "/icon-512.png"])
     )
   );
   self.skipWaiting();
@@ -23,8 +25,10 @@ self.addEventListener("activate", (event) => {
 
 // Network First: ネットワーク優先、失敗時にキャッシュ
 self.addEventListener("fetch", (event) => {
-  // APIリクエストはキャッシュしない
-  if (event.request.url.includes("/api/")) return;
+  if (event.request.method !== "GET") return;
+  const url = new URL(event.request.url);
+  // API・Next.js ビルド成果物はキャッシュしない（respondWith なし＝ブラウザの通常取得）
+  if (url.pathname.includes("/api/") || url.pathname.startsWith("/_next/") || event.request.mode === "navigate") return;
 
   event.respondWith(
     fetch(event.request)

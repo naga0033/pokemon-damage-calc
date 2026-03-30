@@ -268,7 +268,7 @@ export const POKEMON_MASTER_DATA: Record<string, PokemonMasterEntry> = {
       { slug: "intrepid-sword", isHidden: false, slot: 1 },
     ],
     moves: [
-      { slug: "iron-head", jaName: "アイアンヘッド" },
+      { slug: "behemoth-blade", jaName: "きょじゅうざん" },
       { slug: "play-rough", jaName: "じゃれつく" },
       { slug: "trailblaze", jaName: "くさわけ" },
       { slug: "swords-dance", jaName: "つるぎのまい" },
@@ -1100,10 +1100,10 @@ export const POKEMON_MASTER_DATA: Record<string, PokemonMasterEntry> = {
     moves: [
       { slug: "body-press", jaName: "ボディプレス" },
       { slug: "iron-defense", jaName: "てっぺき" },
+      { slug: "behemoth-bash", jaName: "きょじゅうだん" },
       { slug: "heavy-slam", jaName: "ヘビーボンバー" },
       { slug: "agility", jaName: "こうそくいどう" },
       { slug: "crunch", jaName: "かみくだく" },
-      { slug: "iron-head", jaName: "アイアンヘッド" },
       { slug: "substitute", jaName: "みがわり" },
       { slug: "trailblaze", jaName: "くさわけ" },
       { slug: "light-screen", jaName: "ひかりのかべ" },

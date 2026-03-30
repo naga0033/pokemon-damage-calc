@@ -224,7 +224,7 @@ export default function StatEditor(props: Props) {
             className="w-full border border-gray-300 rounded px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400">
             <option value="">特性を選択</option>
             {abilities.map((a) => (
-              <option key={a.slug} value={a.slug}>{getAbilityJaName(a.slug)}{a.isHidden ? " (夢)" : ""}</option>
+              <option key={a.slug} value={a.slug}>{getAbilityJaName(a.slug)}</option>
             ))}
           </select>
         </div>
@@ -290,24 +290,41 @@ export default function StatEditor(props: Props) {
                     onMouseDown={(e) => { e.preventDefault(); onEvChange(key, 0); }}>0</button>
                   <input type="range" min={0} max={252} step={4} value={evs[key]}
                     onChange={(e) => { const v = Math.min(252, Math.max(0, +e.target.value)); const others = totalEv - evs[key]; onEvChange(key, Math.min(v, 510 - others)); }}
-                    className="flex-1 h-1 accent-blue-500 min-w-0" />
+                    className="flex-1 h-2 accent-blue-500 min-w-0" />
                   <button className="text-[9px] px-0.5 py-0.5 rounded bg-orange-100 hover:bg-orange-200 text-orange-700 font-bold flex-shrink-0"
                     onMouseDown={(e) => { e.preventDefault(); const others = totalEv - evs[key]; onEvChange(key, Math.min(252, 510 - others)); }}>252</button>
                 </div>
+                {/* EV入力: スマホ=ネイティブinput / PC=NumpadPopup */}
                 <div className="relative">
+                  {/* スマホ用: ネイティブテンキー */}
+                  <input
+                    type="text" inputMode="numeric" pattern="[0-9]*"
+                    className="md:hidden w-full border border-gray-200 rounded text-center text-[11px] py-0.5 text-gray-700 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200"
+                    value={String(evs[key])}
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/[^0-9]/g, "");
+                      const v = Math.min(252, Math.max(0, parseInt(raw, 10) || 0));
+                      const others = totalEv - evs[key];
+                      onEvChange(key, Math.min(v, 510 - others));
+                    }}
+                    onFocus={(e) => e.target.select()}
+                  />
+                  {/* PC用: カスタムNumpadPopup */}
                   <button
-                    className={`w-full border rounded text-center text-[11px] py-0.5 transition-colors ${isEvActive ? "border-blue-400 ring-1 ring-blue-200 bg-blue-50 text-blue-800" : "border-gray-200 hover:border-blue-300 text-gray-700"}`}
+                    className={`hidden md:block w-full border rounded text-center text-[11px] py-0.5 transition-colors ${isEvActive ? "border-blue-400 ring-1 ring-blue-200 bg-blue-50 text-blue-800" : "border-gray-200 hover:border-blue-300 text-gray-700"}`}
                     onMouseDown={(e) => { e.preventDefault(); isEvActive ? applyAndClose() : openNumpad(key, "ev", evs[key], e.currentTarget); }}
                   >{displayEv !== "" ? displayEv : "—"}</button>
-                  {isEvActive && <NumpadPopup value={numpadStr} maxLabel={getMaxLabel("ev", key)} minLabel={getMinLabel("ev", key)} onDigit={handleDigit} onClear={() => setNumpadStr("")} onMax={handleMax} onMin={handleMin} pos={numpadPos ?? undefined} />}
+                  {isEvActive && <div className="hidden md:block"><NumpadPopup value={numpadStr} maxLabel={getMaxLabel("ev", key)} minLabel={getMinLabel("ev", key)} onDigit={handleDigit} onClear={() => setNumpadStr("")} onMax={handleMax} onMin={handleMin} pos={numpadPos ?? undefined} /></div>}
                 </div>
+                {/* 実数値: スマホ=読み取り専用テキスト / PC=NumpadPopup */}
                 <div className="relative">
+                  <span className={`md:hidden block w-full text-center text-sm py-0.5 ${finalColor}`}>{finals[key]}</span>
                   <button
-                    className={`w-full text-center text-sm rounded-lg py-0.5 border-2 transition-colors ${finalColor} ${isFinalActive ? "border-blue-400 ring-1 ring-blue-200 bg-blue-50" : "border-transparent hover:border-gray-300 hover:bg-gray-50"}`}
+                    className={`hidden md:block w-full text-center text-sm rounded-lg py-0.5 border-2 transition-colors ${finalColor} ${isFinalActive ? "border-blue-400 ring-1 ring-blue-200 bg-blue-50" : "border-transparent hover:border-gray-300 hover:bg-gray-50"}`}
                     onMouseDown={(e) => { e.preventDefault(); isFinalActive ? applyAndClose() : openNumpad(key, "final", finals[key], e.currentTarget); }}
                     title="クリック→EV逆算"
                   >{displayFinal !== "" ? displayFinal : "—"}</button>
-                  {isFinalActive && <NumpadPopup value={numpadStr} maxLabel={getMaxLabel("final", key)} minLabel={getMinLabel("final", key)} onDigit={handleDigit} onClear={() => setNumpadStr("")} onMax={handleMax} onMin={handleMin} pos={numpadPos ?? undefined} />}
+                  {isFinalActive && <div className="hidden md:block"><NumpadPopup value={numpadStr} maxLabel={getMaxLabel("final", key)} minLabel={getMinLabel("final", key)} onDigit={handleDigit} onClear={() => setNumpadStr("")} onMax={handleMax} onMin={handleMin} pos={numpadPos ?? undefined} /></div>}
                 </div>
               </div>
 

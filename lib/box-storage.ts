@@ -6,14 +6,41 @@ export interface BoxEntry {
   state: PokemonState;
   moves?: string[];   // 技1-4 スラッグ（空文字 = なし）
   createdAt: number;
+  updatedAt?: number;
 }
 
 const KEY = "pokemon-dmg-box-v1";
 
+function normalizeMovesForPokemon(pokemonSlug: string | undefined, moves?: string[]): string[] | undefined {
+  if (!moves) return moves;
+
+  if (pokemonSlug === "zacian-crowned") {
+    return moves.map((move) => move === "iron-head" ? "behemoth-blade" : move);
+  }
+
+  if (pokemonSlug === "zamazenta-crowned") {
+    return moves.map((move) => move === "iron-head" ? "behemoth-bash" : move);
+  }
+
+  return moves;
+}
+
+function normalizeEntry(entry: BoxEntry): BoxEntry {
+  return {
+    ...entry,
+    moves: normalizeMovesForPokemon(entry.state.pokemon?.name, entry.moves),
+    updatedAt: entry.updatedAt ?? entry.createdAt,
+  };
+}
+
+function persistEntries(entries: BoxEntry[]) {
+  localStorage.setItem(KEY, JSON.stringify(entries));
+}
+
 export function loadBox(): BoxEntry[] {
   if (typeof window === "undefined") return [];
   try {
-    return JSON.parse(localStorage.getItem(KEY) ?? "[]");
+    return (JSON.parse(localStorage.getItem(KEY) ?? "[]") as BoxEntry[]).map(normalizeEntry);
   } catch {
     return [];
   }
@@ -21,22 +48,24 @@ export function loadBox(): BoxEntry[] {
 
 export function saveToBox(name: string, state: PokemonState, moves?: string[]): BoxEntry[] {
   const entries = loadBox();
-  const entry: BoxEntry = { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, name, state, moves, createdAt: Date.now() };
+  const now = Date.now();
+  const entry: BoxEntry = { id: `${now}-${Math.random().toString(36).slice(2)}`, name, state, moves, createdAt: now, updatedAt: now };
   const next = [entry, ...entries];
-  localStorage.setItem(KEY, JSON.stringify(next));
+  persistEntries(next);
   return next;
 }
 
 export function deleteFromBox(id: string): BoxEntry[] {
   const next = loadBox().filter((e) => e.id !== id);
-  localStorage.setItem(KEY, JSON.stringify(next));
+  persistEntries(next);
   return next;
 }
 
 export function updateBox(id: string, name: string, state: PokemonState, moves?: string[]): BoxEntry[] {
   const entries = loadBox();
-  const next = entries.map((e) => e.id === id ? { ...e, name, state, moves } : e);
-  localStorage.setItem(KEY, JSON.stringify(next));
+  const now = Date.now();
+  const next = entries.map((e) => e.id === id ? { ...e, name, state, moves, updatedAt: now } : e);
+  persistEntries(next);
   return next;
 }
 
@@ -47,14 +76,22 @@ export interface BattleTeam {
   name: string;
   memberIds: string[];  // BoxEntry IDs (max 6)
   createdAt: number;
+  updatedAt?: number;
 }
 
 const TEAM_KEY = "pokemon-dmg-teams-v1";
 
+function normalizeTeam(team: BattleTeam): BattleTeam {
+  return {
+    ...team,
+    updatedAt: team.updatedAt ?? team.createdAt,
+  };
+}
+
 export function loadTeams(): BattleTeam[] {
   if (typeof window === "undefined") return [];
   try {
-    return JSON.parse(localStorage.getItem(TEAM_KEY) ?? "[]");
+    return (JSON.parse(localStorage.getItem(TEAM_KEY) ?? "[]") as BattleTeam[]).map(normalizeTeam);
   } catch {
     return [];
   }
@@ -66,11 +103,13 @@ function saveTeams(teams: BattleTeam[]) {
 
 export function createTeam(name: string): BattleTeam[] {
   const teams = loadTeams();
+  const now = Date.now();
   const team: BattleTeam = {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    id: `${now}-${Math.random().toString(36).slice(2)}`,
     name,
     memberIds: [],
-    createdAt: Date.now(),
+    createdAt: now,
+    updatedAt: now,
   };
   const next = [...teams, team];
   saveTeams(next);
@@ -79,7 +118,8 @@ export function createTeam(name: string): BattleTeam[] {
 
 export function updateTeam(id: string, patch: Partial<Pick<BattleTeam, "name" | "memberIds">>): BattleTeam[] {
   const teams = loadTeams();
-  const next = teams.map((t) => t.id === id ? { ...t, ...patch } : t);
+  const now = Date.now();
+  const next = teams.map((t) => t.id === id ? { ...t, ...patch, updatedAt: now } : t);
   saveTeams(next);
   return next;
 }
@@ -113,18 +153,25 @@ export function importBoxFromShareString(encoded: string): BoxEntry[] | null {
     const json = new TextDecoder().decode(bytes);
     const data = JSON.parse(json);
     if (!Array.isArray(data)) return null;
-    return data as BoxEntry[];
+    return (data as BoxEntry[]).map(normalizeEntry);
   } catch {
     return null;
   }
 }
 
-/** インポートしたデータを既存ボックスにマージ（ID重複は上書き） */
+/** インポートしたデータを既存ボックスにマージ（ID重複は新しい updatedAt を優先） */
 export function mergeImportedBox(imported: BoxEntry[]): BoxEntry[] {
   const existing = loadBox();
-  const existingIds = new Set(existing.map((e) => e.id));
-  const newEntries = imported.filter((e) => !existingIds.has(e.id));
-  const merged = [...newEntries, ...existing];
-  localStorage.setItem(KEY, JSON.stringify(merged));
+  const mergedMap = new Map<string, BoxEntry>();
+
+  for (const entry of [...existing, ...imported.map(normalizeEntry)]) {
+    const current = mergedMap.get(entry.id);
+    if (!current || (entry.updatedAt ?? entry.createdAt) >= (current.updatedAt ?? current.createdAt)) {
+      mergedMap.set(entry.id, entry);
+    }
+  }
+
+  const merged = [...mergedMap.values()].sort((a, b) => (b.updatedAt ?? b.createdAt) - (a.updatedAt ?? a.createdAt));
+  persistEntries(merged);
   return merged;
 }

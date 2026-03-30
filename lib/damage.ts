@@ -1,6 +1,7 @@
-import type { PokemonType, MoveData, WeatherCondition, TerrainCondition, DamageResult, FieldConditions } from "./types";
+import type { PokemonType, MoveData, WeatherCondition, TerrainCondition, DamageResult, FieldConditions, DamageModifier } from "./types";
 import { getTypeEffectiveness } from "./type-chart";
 import { ITEM_MAP } from "./items";
+import { SOUND_MOVES } from "./move-metadata";
 
 interface DamageInput {
   attackerLevel: number;
@@ -49,11 +50,62 @@ interface DamageInput {
   defenderWeight?: number;
   /** しっぺがえし後攻フラグ（威力2倍） */
   isPaybackDoubled?: boolean;
+  /** 攻撃側が地面に接しているか */
+  attackerIsGrounded?: boolean;
+  /** 防御側が地面に接しているか */
+  defenderIsGrounded?: boolean;
+  /** こだいかっせい/クォークチャージが攻撃・特攻に適用されるか */
+  attackerAbilityBoostedStat?: "attack" | "spAtk" | "defense" | "spDef" | "speed" | null;
 }
+
+const PUNCH_MOVES = new Set([
+  "bullet-punch", "comet-punch", "dizzy-punch", "double-iron-bash", "drain-punch",
+  "dynamic-punch", "fire-punch", "focus-punch", "hammer-arm", "ice-punch",
+  "jet-punch", "mach-punch", "mega-punch", "meteor-mash", "plasma-fists",
+  "power-up-punch", "shadow-punch", "sky-uppercut", "surging-strikes", "thunder-punch",
+  "wicked-blow",
+]);
+
+const BITE_MOVES = new Set([
+  "bite", "bug-bite", "crunch", "fire-fang", "fishious-rend", "hyper-fang",
+  "ice-fang", "jaw-lock", "poison-fang", "psychic-fangs", "thunder-fang",
+]);
+
+const PULSE_MOVES = new Set([
+  "aura-sphere", "dark-pulse", "dragon-pulse", "heal-pulse", "origin-pulse",
+  "terrain-pulse", "water-pulse",
+]);
+
+const SLICING_MOVES = new Set([
+  "air-cutter", "aerial-ace", "air-slash", "behemoth-blade", "bitter-blade",
+  "ceaseless-edge", "cross-poison", "cut", "fury-cutter", "ivy-cudgel",
+  "kowtow-cleave", "leaf-blade", "night-slash", "population-bomb", "psyblade",
+  "psycho-cut",
+  "razor-leaf", "sacred-sword", "secret-sword", "slash", "solar-blade",
+  "stone-axe", "x-scissor",
+]);
+
+const BULLET_MOVES = new Set([
+  "acid-spray", "aura-sphere", "bullet-seed", "electro-shot", "egg-bomb",
+  "energy-ball", "focus-blast", "gyro-ball", "ice-ball", "magnet-bomb",
+  "mist-ball", "mud-ball", "octazooka", "pyro-ball", "rock-blast", "seed-bomb",
+  "shadow-ball", "sludge-bomb", "weather-ball", "zap-cannon",
+]);
+
+const ABILITY_IGNORING_MOVES = new Set([
+  "moongeist-beam",
+  "sunsteel-strike",
+  "photon-geyser",
+  "light-that-burns-the-sky",
+]);
 
 function rankMult(rank: number): number {
   if (rank >= 0) return (2 + rank) / 2;
   return 2 / (2 - rank);
+}
+
+function moveMatches(move: MoveData, ...candidates: string[]): boolean {
+  return candidates.includes(move.name) || candidates.includes(move.japaneseName);
 }
 
 /**
@@ -73,6 +125,10 @@ export function calcDamage(input: DamageInput): DamageResult {
   } = input;
 
   let { attackStat, defenseStat } = input;
+  const modifiers: DamageModifier[] = [];
+  const attackerIsGrounded = input.attackerIsGrounded ?? true;
+  const defenderIsGrounded = input.defenderIsGrounded ?? true;
+  const ignoresDefenderAbility = ABILITY_IGNORING_MOVES.has(move.name);
 
   // ダイマックス: 防御側のHPを2倍
   const effectiveDefenderHp = input.isDefenderDynamaxed ? defenderHp * 2 : defenderHp;
@@ -87,6 +143,7 @@ export function calcDamage(input: DamageInput): DamageResult {
       typeEffectiveness: 0,
       attackStat, defenseStat, defenderHp: effectiveDefenderHp,
       rolls: [],
+      modifiers,
     };
   }
 
@@ -111,20 +168,51 @@ export function calcDamage(input: DamageInput): DamageResult {
   // タイプ相性
   let typeEff = getTypeEffectiveness(effectiveMoveType, effectiveDefTypes);
 
+  if (moveMatches(move, "freeze-dry", "フリーズドライ") && effectiveDefTypes.includes("water")) {
+    typeEff *= 4;
+    modifiers.push({ label: "フリーズドライ", value: 2, detail: "みずタイプへ最終的に抜群" });
+  }
+
   // 防御側特性によるタイプ無効化
-  if (defenderAbility === "levitate" && effectiveMoveType === "ground") typeEff = 0;
-  if (defenderAbility === "volt-absorb" && effectiveMoveType === "electric") typeEff = 0;
-  if (defenderAbility === "water-absorb" && effectiveMoveType === "water") typeEff = 0;
-  if (defenderAbility === "flash-fire" && effectiveMoveType === "fire") typeEff = 0;
-  if (defenderAbility === "sap-sipper" && effectiveMoveType === "grass") typeEff = 0;
-  if (defenderAbility === "storm-drain" && effectiveMoveType === "water") typeEff = 0;
-  if (defenderAbility === "lightning-rod" && effectiveMoveType === "electric") typeEff = 0;
-  if (defenderAbility === "wonder-guard") {
+  const ignoresGroundImmunity = move.name === "thousand-arrows";
+  if (defenderAbility === "levitate" && effectiveMoveType === "ground" && !ignoresGroundImmunity && !ignoresDefenderAbility) typeEff = 0;
+  if (defenderAbility === "volt-absorb" && effectiveMoveType === "electric" && !ignoresDefenderAbility) typeEff = 0;
+  if (defenderAbility === "water-absorb" && effectiveMoveType === "water" && !ignoresDefenderAbility) typeEff = 0;
+  if (defenderAbility === "flash-fire" && effectiveMoveType === "fire" && !ignoresDefenderAbility) typeEff = 0;
+  if (defenderAbility === "sap-sipper" && effectiveMoveType === "grass" && !ignoresDefenderAbility) typeEff = 0;
+  if (defenderAbility === "storm-drain" && effectiveMoveType === "water" && !ignoresDefenderAbility) typeEff = 0;
+  if (defenderAbility === "lightning-rod" && effectiveMoveType === "electric" && !ignoresDefenderAbility) typeEff = 0;
+  if (defenderAbility === "wonder-guard" && !ignoresDefenderAbility) {
     // ふしぎなまもり: 弱点以外無効
     typeEff = typeEff > 1 ? typeEff : 0;
   }
-  if (defenderAbility === "thick-fat" && (effectiveMoveType === "fire" || effectiveMoveType === "ice")) {
+  if (defenderAbility === "thick-fat" && (effectiveMoveType === "fire" || effectiveMoveType === "ice") && !ignoresDefenderAbility) {
     typeEff *= 0.5;
+    modifiers.push({ label: "あついしぼう", value: 0.5, detail: "ほのお/こおり半減" });
+  }
+  if (defenderAbility === "dry-skin" && effectiveMoveType === "water" && !ignoresDefenderAbility) {
+    typeEff = 0;
+  }
+  if (defenderAbility === "dry-skin" && effectiveMoveType === "fire" && !ignoresDefenderAbility) {
+    typeEff *= 1.25;
+    modifiers.push({ label: "かんそうはだ", value: 1.25, detail: "ほのお被ダメージ増加" });
+  }
+  if (defenderAbility === "earth-eater" && effectiveMoveType === "ground" && !ignoresDefenderAbility) typeEff = 0;
+  if (defenderAbility === "bulletproof" && BULLET_MOVES.has(move.name) && !ignoresDefenderAbility) typeEff = 0;
+  if (ignoresGroundImmunity && typeEff === 0 && effectiveMoveType === "ground") {
+    typeEff = 1;
+    modifiers.push({ label: "サウザンアロー", value: 1, detail: "じめん無効を貫通" });
+  }
+  if (terrain === "psychic" && move.priority > 0 && defenderIsGrounded) {
+    return {
+      minDamage: 0, maxDamage: 0,
+      minPercent: 0, maxPercent: 0,
+      koLabel: "サイコフィールドで無効",
+      typeEffectiveness: 0,
+      attackStat, defenseStat, defenderHp: effectiveDefenderHp,
+      rolls: [],
+      modifiers: [{ label: "サイコフィールド", value: 0, detail: "優先度+1以上の技を無効化" }],
+    };
   }
 
   if (typeEff === 0) {
@@ -135,6 +223,7 @@ export function calcDamage(input: DamageInput): DamageResult {
       typeEffectiveness: 0,
       attackStat, defenseStat, defenderHp: effectiveDefenderHp,
       rolls: [],
+      modifiers,
     };
   }
 
@@ -142,18 +231,22 @@ export function calcDamage(input: DamageInput): DamageResult {
   const atkItem = ITEM_MAP[attackerItem];
   if (atkItem?.effect === "choice-band" && move.category === "physical") {
     attackStat = Math.floor(attackStat * 1.5);
+    modifiers.push({ label: "こだわりハチマキ", value: 1.5 });
   }
   if (atkItem?.effect === "choice-specs" && move.category === "special") {
     attackStat = Math.floor(attackStat * 1.5);
+    modifiers.push({ label: "こだわりメガネ", value: 1.5 });
   }
 
   // 防御側持ち物によるステータス補正
   const defItem = ITEM_MAP[defenderItem];
   if (defItem?.effect === "assault-vest" && move.category === "special") {
     defenseStat = Math.floor(defenseStat * 1.5);
+    modifiers.push({ label: "とつげきチョッキ", value: 1.5 });
   }
   if (defItem?.effect === "eviolite") {
     defenseStat = Math.floor(defenseStat * 1.5);
+    modifiers.push({ label: "しんかのきせき", value: 1.5 });
   }
 
   // 攻撃側特性補正
@@ -175,35 +268,47 @@ export function calcDamage(input: DamageInput): DamageResult {
   }
   // こだいかっせい（パラドックス古代）: 晴れ下で最も高いステータス×1.3（攻撃系に適用）
   if (attackerAbility === "protosynthesis" && weather === "sun") {
-    if (move.category === "physical") abilityAtkMod *= 1.3;
-    else if (move.category === "special") abilityAtkMod *= 1.3;
+    if (input.attackerAbilityBoostedStat === "attack" && move.category === "physical") abilityAtkMod *= 1.3;
+    else if (input.attackerAbilityBoostedStat === "spAtk" && move.category === "special") abilityAtkMod *= 1.3;
   }
   // クォークチャージ（パラドックス未来）: エレキフィールド下で最も高いステータス×1.3
   if (attackerAbility === "quark-drive" && terrain === "electric") {
-    if (move.category === "physical") abilityAtkMod *= 1.3;
-    else if (move.category === "special") abilityAtkMod *= 1.3;
+    if (input.attackerAbilityBoostedStat === "attack" && move.category === "physical") abilityAtkMod *= 1.3;
+    else if (input.attackerAbilityBoostedStat === "spAtk" && move.category === "special") abilityAtkMod *= 1.3;
   }
+  if (attackerAbility === "iron-fist" && PUNCH_MOVES.has(move.name)) abilityAtkMod *= 1.2;
+  if (attackerAbility === "strong-jaw" && BITE_MOVES.has(move.name)) abilityAtkMod *= 1.5;
+  if (attackerAbility === "mega-launcher" && PULSE_MOVES.has(move.name)) abilityAtkMod *= 1.5;
+  if (attackerAbility === "sharpness" && SLICING_MOVES.has(move.name)) abilityAtkMod *= 1.5;
+  if (attackerAbility === "punk-rock" && move.category !== "status" && SOUND_MOVES.has(move.name)) abilityAtkMod *= 1.3;
   // こんじょう（やけど時、物理攻撃×1.5）※ すでに burnMod で 0.5 がかかるが、こんじょうなら打ち消し+1.5倍
   // ※ burnMod は後段で処理済みなのでここでは対応なし（別途burnModで対処）
 
+  if (abilityAtkMod !== 1) {
+    modifiers.push({ label: "攻撃側特性", value: abilityAtkMod, detail: attackerAbility });
+  }
   attackStat = Math.floor(attackStat * abilityAtkMod);
 
   // 災いの特性（Ruin Abilities）
   // わざわいのつるぎ（sword-of-ruin）: 相手のぼうぎょ×0.75
   if (attackerAbility === "sword-of-ruin" && move.category === "physical") {
     defenseStat = Math.floor(defenseStat * 0.75);
+    modifiers.push({ label: "わざわいのつるぎ", value: 1 / 0.75, detail: "相手の防御を25%低下" });
   }
   // わざわいのおふだ（tablets-of-ruin）: 相手のこうげき×0.75
   if (defenderAbility === "tablets-of-ruin" && move.category === "physical") {
     attackStat = Math.floor(attackStat * 0.75);
+    modifiers.push({ label: "わざわいのおふだ", value: 0.75, detail: "攻撃を25%低下" });
   }
   // わざわいのたま（beads-of-ruin）: 相手のとくぼう×0.75
   if (attackerAbility === "beads-of-ruin" && move.category === "special") {
     defenseStat = Math.floor(defenseStat * 0.75);
+    modifiers.push({ label: "わざわいのたま", value: 1 / 0.75, detail: "相手の特防を25%低下" });
   }
   // わざわいのうつわ（vessel-of-ruin）: 相手のとくこう×0.75
   if (defenderAbility === "vessel-of-ruin" && move.category === "special") {
     attackStat = Math.floor(attackStat * 0.75);
+    modifiers.push({ label: "わざわいのうつわ", value: 0.75, detail: "特攻を25%低下" });
   }
 
   // ★ステラテラスタル用: テラバースト威力を100に上書き
@@ -244,10 +349,32 @@ export function calcDamage(input: DamageInput): DamageResult {
   // しっぺがえし: 後攻時に威力2倍
   if (move.name === "payback" && input.isPaybackDoubled) {
     effectivePower = effectivePower * 2;
+    modifiers.push({ label: "しっぺがえし", value: 2, detail: "後攻で威力2倍" });
+  }
+  if (move.name === "facade" && isBurned) {
+    effectivePower *= 2;
+    modifiers.push({ label: "からげんき", value: 2, detail: "状態異常で威力2倍" });
+  }
+  if (move.name === "expanding-force" && terrain === "psychic" && attackerIsGrounded) {
+    effectivePower = Math.floor(effectivePower * 1.5);
+    modifiers.push({ label: "ワイドフォース", value: 1.5, detail: "サイコフィールドで威力上昇" });
+  }
+  if (move.name === "rising-voltage" && terrain === "electric" && defenderIsGrounded) {
+    effectivePower *= 2;
+    modifiers.push({ label: "ライジングボルト", value: 2, detail: "接地相手に威力2倍" });
+  }
+  if ((move.name === "solar-beam" || move.name === "solar-blade") && weather !== "none" && weather !== "sun") {
+    effectivePower = Math.floor(effectivePower / 2);
+    modifiers.push({ label: "ソーラービーム", value: 0.5, detail: `${weather}で威力半減` });
+  }
+  if (move.name === "knock-off" && defenderItem) {
+    effectivePower = Math.floor(effectivePower * 1.5);
+    modifiers.push({ label: "はたきおとす", value: 1.5, detail: "持ち物ありで威力上昇" });
   }
   // スキン系特性の威力補正（1.2倍）
   if (skinMod !== 1) {
     effectivePower = Math.floor(effectivePower * skinMod);
+    modifiers.push({ label: "スキン特性", value: skinMod, detail: `${move.type} -> ${effectiveMoveType}` });
   }
 
   // STAB計算（テラスタル対応）
@@ -278,53 +405,122 @@ export function calcDamage(input: DamageInput): DamageResult {
   } else {
     stab = attackerTypes.includes(effectiveMoveType) ? stabMultiplier : 1;
   }
+  if (stab !== 1) {
+    modifiers.push({ label: "タイプ一致", value: stab });
+  }
+  if (stellarBoost !== 1) {
+    modifiers.push({ label: "ステラブースト", value: stellarBoost });
+  }
 
   // 天気補正
   let weatherMod = 1;
   if (weather === "sun") {
     if (effectiveMoveType === "fire") weatherMod = 1.5;
-    if (effectiveMoveType === "water") weatherMod = 0.5;
+    if (effectiveMoveType === "water") weatherMod = move.name === "hydro-steam" ? 1.5 : 0.5;
   } else if (weather === "rain") {
     if (effectiveMoveType === "water") weatherMod = 1.5;
     if (effectiveMoveType === "fire") weatherMod = 0.5;
   }
+  if (weatherMod !== 1) {
+    modifiers.push({ label: "天気", value: weatherMod, detail: weather });
+  }
 
-  // テレイン補正（地面にいるポケモンのみ。ここでは常時適用として簡略化）
+  // フィールド補正（地面にいるポケモンのみ）
   const GRASSY_HALVED = ["earthquake", "bulldoze", "magnitude", "stomping-tantrum", "high-horsepower"];
   let terrainMod = 1;
-  if (terrain === "electric" && effectiveMoveType === "electric") terrainMod = 1.3;
-  if (terrain === "grassy" && effectiveMoveType === "grass") terrainMod = 1.3;
-  if (terrain === "grassy" && GRASSY_HALVED.includes(move.name)) terrainMod = 0.5;
-  if (terrain === "misty" && effectiveMoveType === "dragon") terrainMod = 0.5;
-  if (terrain === "psychic" && effectiveMoveType === "psychic") terrainMod = 1.3;
+  if (terrain === "electric" && effectiveMoveType === "electric" && attackerIsGrounded) terrainMod = 1.3;
+  if (terrain === "grassy" && effectiveMoveType === "grass" && attackerIsGrounded) terrainMod = 1.3;
+  if (terrain === "grassy" && GRASSY_HALVED.includes(move.name) && defenderIsGrounded) terrainMod = 0.5;
+  if (terrain === "misty" && effectiveMoveType === "dragon" && defenderIsGrounded) terrainMod = 0.5;
+  if (terrain === "psychic" && effectiveMoveType === "psychic" && attackerIsGrounded) terrainMod = 1.3;
+  if (terrainMod !== 1) {
+    modifiers.push({ label: "フィールド", value: terrainMod, detail: terrain });
+  }
 
   // 急所 (1.5倍)
-  const critMod = isCritical ? 1.5 : 1;
+  const critMod = isCritical ? (attackerAbility === "sniper" ? 2.25 : 1.5) : 1;
+  if (critMod !== 1) {
+    modifiers.push({ label: "急所", value: critMod });
+  }
 
   // やけど (物理技が0.5倍、こんじょうは除く)
   const burnMod = (isBurned && move.category === "physical" && attackerAbility !== "guts") ? 0.5 : 1;
+  if (burnMod !== 1) {
+    modifiers.push({ label: "やけど", value: burnMod });
+  }
 
   // 攻撃側持ち物のダメージ補正
   let itemDmgMod = 1;
   if (atkItem?.effect === "life-orb") itemDmgMod = 1.3;
   if (atkItem?.effect === "expert-belt" && typeEff > 1) itemDmgMod = 1.2;
   if (atkItem?.effect === "type-boost" && atkItem.boostType === effectiveMoveType) itemDmgMod = 1.2;
+  if (itemDmgMod !== 1) {
+    modifiers.push({ label: "攻撃側持ち物", value: itemDmgMod, detail: attackerItem });
+  }
 
   // 防御側特性のダメージ補正（Filter/SolidRock）
   let defAbilityMod = 1;
-  if ((defenderAbility === "filter" || defenderAbility === "solid-rock" || defenderAbility === "prism-armor") && typeEff > 1) {
+  if ((defenderAbility === "filter" || defenderAbility === "solid-rock" || defenderAbility === "prism-armor") && typeEff > 1 && !ignoresDefenderAbility) {
     defAbilityMod = 0.75;
   }
+  if (defenderAbility === "punk-rock" && move.category !== "status" && SOUND_MOVES.has(move.name) && !ignoresDefenderAbility) {
+    defAbilityMod *= 0.5;
+  }
+  if (defenderAbility === "ice-scales" && move.category === "special" && !ignoresDefenderAbility) {
+    defAbilityMod *= 0.5;
+  }
+  if (defenderAbility === "fur-coat" && move.category === "physical" && !ignoresDefenderAbility) {
+    defenseStat = Math.floor(defenseStat * 2);
+    modifiers.push({ label: "ファーコート", value: 0.5, detail: "物理耐久2倍" });
+  }
+  if (defenderAbility === "heatproof" && effectiveMoveType === "fire" && !ignoresDefenderAbility) {
+    defAbilityMod *= 0.5;
+  }
   // マルチスケイル / ファントムガード: HP満タン時のみ0.5倍（連続技は初撃のみ適用）
-  const hasMultiscale = (defenderAbility === "multiscale" || defenderAbility === "shadow-shield") && (input.isDefenderFullHp ?? true);
+  const hasMultiscale = !ignoresDefenderAbility && (defenderAbility === "multiscale" || defenderAbility === "shadow-shield" || defenderAbility === "tera-shell") && (input.isDefenderFullHp ?? true);
   const multiscaleMod = hasMultiscale ? 0.5 : 1;
+  if (defAbilityMod !== 1) {
+    modifiers.push({ label: "防御側特性", value: defAbilityMod, detail: defenderAbility });
+  }
+  if (multiscaleMod !== 1) {
+    modifiers.push({ label: "満タン時軽減", value: multiscaleMod, detail: defenderAbility });
+  }
 
   // ランクボーナス
-  attackStat = Math.floor(attackStat * rankMult(attackerRank ?? 0));
-  defenseStat = Math.floor(defenseStat * rankMult(defenderRank ?? 0));
+  let effectiveAttackerRank = attackerRank ?? 0;
+  let effectiveDefenderRank = defenderRank ?? 0;
+  if (defenderAbility === "unaware" && !ignoresDefenderAbility) {
+    effectiveAttackerRank = 0;
+  }
+  if (attackerAbility === "unaware") {
+    effectiveDefenderRank = 0;
+  }
+  attackStat = Math.floor(attackStat * rankMult(effectiveAttackerRank));
+  defenseStat = Math.floor(defenseStat * rankMult(effectiveDefenderRank));
+
+  // 天候による防御側能力上昇
+  if (weather === "sand" && move.category === "special" && effectiveDefTypes.includes("rock")) {
+    defenseStat = Math.floor(defenseStat * 1.5);
+    modifiers.push({ label: "砂嵐", value: 2 / 3, detail: "いわタイプの特防1.5倍" });
+  }
+  if (weather === "snow" && move.category === "physical" && effectiveDefTypes.includes("ice")) {
+    defenseStat = Math.floor(defenseStat * 1.5);
+    modifiers.push({ label: "雪", value: 2 / 3, detail: "こおりタイプの防御1.5倍" });
+  }
+
+  if (attackerAbility === "tinted-lens" && typeEff > 0 && typeEff < 1) {
+    typeEff *= 2;
+    modifiers.push({ label: "いろめがね", value: 2, detail: "今ひとつを補強" });
+  }
+  if (attackerAbility === "punk-rock" && move.category !== "status" && SOUND_MOVES.has(move.name)) {
+    modifiers.push({ label: "パンクロック", value: 1.3, detail: "音技強化" });
+  }
 
   // じゅうでん (充電)
   const chargeMod = (isCharged && effectiveMoveType === "electric") ? 2 : 1;
+  if (chargeMod !== 1) {
+    modifiers.push({ label: "じゅうでん", value: chargeMod });
+  }
 
   // 壁（ひかりの壁・リフレクター・オーロラベール）— 急所時は無効
   let screenMod = 1;
@@ -338,6 +534,9 @@ export function calcDamage(input: DamageInput): DamageResult {
       screenMod = 0.5;
     }
   }
+  if (screenMod !== 1) {
+    modifiers.push({ label: "壁", value: screenMod });
+  }
 
   // ベースダメージ（ステラテラスバーストは effectivePower=100 を使用）
   const base = Math.floor(
@@ -347,7 +546,7 @@ export function calcDamage(input: DamageInput): DamageResult {
   // 16乱数ロール（1回あたり）
   // extraMod: マルチスケイルなど初撃のみの補正を外部から渡す
   const calcFinal = (rand: number, crit: boolean, extraMod = 1) => {
-    const thisCritMod = crit ? 1.5 : 1;
+    const thisCritMod = crit ? critMod : 1;
     let d = Math.floor(base * rand / 100);
     d = Math.floor(d * thisCritMod);
     d = Math.floor(d * stab);
@@ -381,7 +580,7 @@ export function calcDamage(input: DamageInput): DamageResult {
     return {
       minDamage, maxDamage, minPercent, maxPercent,
       koLabel, typeEffectiveness: typeEff,
-      attackStat, defenseStat, defenderHp: effectiveDefenderHp, rolls,
+      attackStat, defenseStat, defenderHp: effectiveDefenderHp, rolls, modifiers,
     };
   }
 
@@ -431,9 +630,29 @@ export function calcDamage(input: DamageInput): DamageResult {
     koLabel, typeEffectiveness: typeEff,
     attackStat, defenseStat, defenderHp: effectiveDefenderHp,
     rolls: totalRolls,
+    modifiers,
     perHit: { min: perHitMin, max: perHitMax },
     hitCount,
   };
+}
+
+export function isGrounded(
+  types: PokemonType[],
+  ability: string,
+  item: string,
+  teraType: PokemonType | null,
+  isTerastallized: boolean
+): boolean {
+  const effectiveTypes =
+    isTerastallized && teraType && teraType !== "stellar"
+      ? [teraType]
+      : types;
+
+  if (item === "iron-ball") return true;
+  if (item === "air-balloon") return false;
+  if (ability === "levitate") return false;
+  if (effectiveTypes.includes("flying")) return false;
+  return true;
 }
 
 function getKoLabel(rolls: number[], hp: number): string {

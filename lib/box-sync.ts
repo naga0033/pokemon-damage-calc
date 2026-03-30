@@ -1,11 +1,45 @@
 import { supabase } from "./supabase";
-import type { BoxEntry } from "./box-storage";
-import { loadBox } from "./box-storage";
+import type { BattleTeam, BoxEntry } from "./box-storage";
+import { loadBox, loadTeams } from "./box-storage";
+
+export interface CloudSyncData {
+  entries: BoxEntry[];
+  teams: BattleTeam[];
+}
+
+function normalizeCloudData(data: unknown): CloudSyncData {
+  if (Array.isArray(data)) {
+    return { entries: data as BoxEntry[], teams: [] };
+  }
+
+  const payload = data as { entries?: BoxEntry[]; teams?: BattleTeam[] } | null;
+  return {
+    entries: Array.isArray(payload?.entries) ? payload.entries : [],
+    teams: Array.isArray(payload?.teams) ? payload.teams : [],
+  };
+}
+
+function getUpdatedAt(record: { createdAt: number; updatedAt?: number }): number {
+  return record.updatedAt ?? record.createdAt;
+}
+
+function mergeByNewest<T extends { id: string; createdAt: number; updatedAt?: number }>(items: T[]): T[] {
+  const merged = new Map<string, T>();
+
+  for (const item of items) {
+    const current = merged.get(item.id);
+    if (!current || getUpdatedAt(item) >= getUpdatedAt(current)) {
+      merged.set(item.id, item);
+    }
+  }
+
+  return [...merged.values()].sort((a, b) => getUpdatedAt(b) - getUpdatedAt(a));
+}
 
 /**
  * Supabaseからボックスデータを読み込む
  */
-export async function loadBoxFromCloud(userId: string): Promise<BoxEntry[] | null> {
+export async function loadCloudDataFromCloud(userId: string): Promise<CloudSyncData | null> {
   const { data, error } = await supabase
     .from("box_entries")
     .select("data")
@@ -13,18 +47,18 @@ export async function loadBoxFromCloud(userId: string): Promise<BoxEntry[] | nul
     .maybeSingle(); // single()だとデータなしでエラーになるためmaybeSingleに変更
 
   if (error) {
-    console.error("[box-sync] loadBoxFromCloud error:", error.message);
+    console.error("[box-sync] loadCloudDataFromCloud error:", error.message);
     return null;
   }
   if (!data) return null;
-  return data.data as BoxEntry[];
+  return normalizeCloudData(data.data);
 }
 
 /**
  * Supabaseにボックスデータを保存
  * 既存レコードがあればupdate、なければinsert
  */
-export async function saveBoxToCloud(userId: string, entries: BoxEntry[]): Promise<boolean> {
+export async function saveCloudDataToCloud(userId: string, syncData: CloudSyncData): Promise<boolean> {
   // まず既存レコードがあるか確認
   const { data: existing } = await supabase
     .from("box_entries")
@@ -36,7 +70,7 @@ export async function saveBoxToCloud(userId: string, entries: BoxEntry[]): Promi
     // 既存レコードを更新
     const { error } = await supabase
       .from("box_entries")
-      .update({ data: entries, updated_at: new Date().toISOString() })
+      .update({ data: syncData, updated_at: new Date().toISOString() })
       .eq("user_id", userId);
     if (error) {
       console.error("[box-sync] update error:", error.message);
@@ -46,50 +80,66 @@ export async function saveBoxToCloud(userId: string, entries: BoxEntry[]): Promi
     // 新規レコードを挿入
     const { error } = await supabase
       .from("box_entries")
-      .insert({ user_id: userId, data: entries, updated_at: new Date().toISOString() });
+      .insert({ user_id: userId, data: syncData, updated_at: new Date().toISOString() });
     if (error) {
       console.error("[box-sync] insert error:", error.message);
       return false;
     }
   }
 
-  console.log("[box-sync] saved to cloud:", entries.length, "entries");
+  console.log("[box-sync] saved to cloud:", syncData.entries.length, "entries,", syncData.teams.length, "teams");
   return true;
+}
+
+function mergeLocalAndCloud(cloudData: CloudSyncData, localData: CloudSyncData): CloudSyncData {
+  return {
+    entries: mergeByNewest<BoxEntry>([...cloudData.entries, ...localData.entries]),
+    teams: mergeByNewest<BattleTeam>([...cloudData.teams, ...localData.teams]),
+  };
 }
 
 /**
  * ログイン時にLocalStorageのデータをSupabaseに移行
  */
-export async function migrateLocalToCloud(userId: string): Promise<BoxEntry[]> {
-  const cloudData = await loadBoxFromCloud(userId);
-  const localData = loadBox();
+export async function migrateLocalToCloud(userId: string): Promise<CloudSyncData> {
+  const cloudData = await loadCloudDataFromCloud(userId);
+  const localData: CloudSyncData = {
+    entries: loadBox(),
+    teams: loadTeams(),
+  };
 
-  console.log("[box-sync] migrate: cloud=", cloudData?.length ?? 0, "local=", localData.length);
+  console.log(
+    "[box-sync] migrate:",
+    "cloud entries=", cloudData?.entries.length ?? 0,
+    "local entries=", localData.entries.length,
+    "cloud teams=", cloudData?.teams.length ?? 0,
+    "local teams=", localData.teams.length
+  );
 
-  if (cloudData && cloudData.length > 0) {
-    const cloudIds = new Set(cloudData.map((e) => e.id));
-    const localOnly = localData.filter((e) => !cloudIds.has(e.id));
-
-    if (localOnly.length > 0) {
-      const merged = [...cloudData, ...localOnly];
-      await saveBoxToCloud(userId, merged);
+  if (cloudData && (cloudData.entries.length > 0 || cloudData.teams.length > 0)) {
+    const merged = mergeLocalAndCloud(cloudData, localData);
+    if (
+      merged.entries.length !== cloudData.entries.length ||
+      merged.teams.length !== cloudData.teams.length
+    ) {
+      await saveCloudDataToCloud(userId, merged);
       return merged;
     }
     return cloudData;
-  } else if (localData.length > 0) {
-    await saveBoxToCloud(userId, localData);
+  } else if (localData.entries.length > 0 || localData.teams.length > 0) {
+    await saveCloudDataToCloud(userId, localData);
     return localData;
   }
 
-  return [];
+  return { entries: [], teams: [] };
 }
 
 /**
  * リアルタイム同期を開始
  */
-export function subscribeToBoxChanges(
+export function subscribeToCloudChanges(
   userId: string,
-  onUpdate: (entries: BoxEntry[]) => void
+  onUpdate: (syncData: CloudSyncData) => void
 ) {
   const channel = supabase
     .channel("box_changes")
@@ -102,9 +152,9 @@ export function subscribeToBoxChanges(
         filter: `user_id=eq.${userId}`,
       },
       (payload) => {
-        const newData = (payload.new as { data: BoxEntry[] })?.data;
+        const newData = normalizeCloudData((payload.new as { data?: unknown })?.data);
         if (newData) {
-          console.log("[box-sync] realtime update:", newData.length, "entries");
+          console.log("[box-sync] realtime update:", newData.entries.length, "entries,", newData.teams.length, "teams");
           onUpdate(newData);
         }
       }

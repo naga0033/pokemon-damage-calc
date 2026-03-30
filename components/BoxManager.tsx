@@ -1,11 +1,13 @@
 "use client";
 import { useState, useMemo, useRef } from "react";
 import type { BoxEntry, BattleTeam } from "@/lib/box-storage";
-import { loadTeams, createTeam, updateTeam, deleteTeam, exportBoxToShareString } from "@/lib/box-storage";
+import { createTeam, updateTeam, deleteTeam, exportBoxToShareString } from "@/lib/box-storage";
 import { TYPE_COLORS, TYPE_NAMES_JA } from "@/lib/type-chart";
 import { calcAllStats, NATURE_DATA } from "@/lib/stats";
 import type { PokemonType, PokemonState } from "@/lib/types";
 import { KanaKeyboard } from "@/components/KanaKeyboard";
+import { formatPokemonText } from "@/lib/pokemon-text";
+import { copyText } from "@/lib/clipboard";
 
 /* ── ソート ── */
 type SortMode = "newest" | "dex" | "speed";
@@ -31,19 +33,20 @@ function sortEntries(entries: BoxEntry[], mode: SortMode): BoxEntry[] {
 /* ── Props ── */
 interface BoxManagerProps {
   entries: BoxEntry[];
+  teams: BattleTeam[];
   onSelectAttacker: (state: PokemonState, moves?: string[]) => void;
   onSelectDefender: (state: PokemonState, moves?: string[]) => void;
   onEdit: (entry: BoxEntry) => void;
   onDelete: (id: string) => void;
+  onTeamsChange: (teams: BattleTeam[]) => void;
   onClose: () => void;
 }
 
 /* ── メインコンポーネント ── */
-export default function BoxManager({ entries, onSelectAttacker, onSelectDefender, onEdit, onDelete, onClose }: BoxManagerProps) {
+export default function BoxManager({ entries, teams, onSelectAttacker, onSelectDefender, onEdit, onDelete, onTeamsChange, onClose }: BoxManagerProps) {
   const [tab, setTab] = useState<"box" | "team">("box");
   const [sort, setSort] = useState<SortMode>("newest");
   const [typeFilter, setTypeFilter] = useState<PokemonType | "all">("all");
-  const [teams, setTeams] = useState<BattleTeam[]>(() => loadTeams());
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
   const [teamNameInput, setTeamNameInput] = useState("");
   const [selectedEntryId, setSelectedEntryId] = useState<string | null>(null);
@@ -77,7 +80,7 @@ export default function BoxManager({ entries, onSelectAttacker, onSelectDefender
   const handleCreateTeam = () => {
     const name = teamNameInput.trim() || `チーム${teams.length + 1}`;
     const newTeams = createTeam(name);
-    setTeams(newTeams);
+    onTeamsChange(newTeams);
     setTeamNameInput("");
     // 即座に編集モードに入る
     const created = newTeams[newTeams.length - 1];
@@ -94,13 +97,24 @@ export default function BoxManager({ entries, onSelectAttacker, onSelectDefender
       : team.memberIds.length < 6
         ? [...team.memberIds, entryId]
         : team.memberIds;
-    setTeams(updateTeam(teamId, { memberIds: newIds }));
+    onTeamsChange(updateTeam(teamId, { memberIds: newIds }));
   };
 
   /* 素早さ計算 */
   const getSpeed = (entry: BoxEntry) => {
     if (!entry.state.pokemon) return 0;
     return calcAllStats(entry.state.pokemon.baseStats, entry.state.ivs, entry.state.evs, entry.state.level, entry.state.nature).speed;
+  };
+
+  const copyEntryAsText = async (entry: BoxEntry) => {
+    const text = formatPokemonText(entry.state, entry.moves ?? []);
+    try {
+      const copied = await copyText(text);
+      if (!copied) throw new Error("copy failed");
+      alert("コピーが完了しました");
+    } catch {
+      prompt("文字情報をコピーしてください", text);
+    }
   };
 
   /* タイプ一覧 */
@@ -144,16 +158,16 @@ export default function BoxManager({ entries, onSelectAttacker, onSelectDefender
         {/* タブ */}
         <div className="flex border-b">
           <button
-            className={`flex-1 py-2.5 text-sm font-bold ${tab === "box" ? "bg-white text-blue-600 border-b-2 border-blue-600" : "bg-gray-100 text-gray-500"}`}
-            onClick={() => setTab("box")}
-          >
-            📦 ボックス ({entries.length})
-          </button>
-          <button
             className={`flex-1 py-2.5 text-sm font-bold ${tab === "team" ? "bg-white text-blue-600 border-b-2 border-blue-600" : "bg-gray-100 text-gray-500"}`}
             onClick={() => setTab("team")}
           >
             ⚔️ バトルチーム ({teams.length})
+          </button>
+          <button
+            className={`flex-1 py-2.5 text-sm font-bold ${tab === "box" ? "bg-white text-blue-600 border-b-2 border-blue-600" : "bg-gray-100 text-gray-500"}`}
+            onClick={() => setTab("box")}
+          >
+            📦 ボックス ({entries.length})
           </button>
         </div>
 
@@ -323,22 +337,16 @@ export default function BoxManager({ entries, onSelectAttacker, onSelectDefender
                     {/* アクションボタン */}
                     <div className="flex gap-2 mt-2 flex-wrap">
                       <button
-                        onClick={() => { onSelectAttacker(selectedEntry.state, selectedEntry.moves); onClose(); }}
-                        className="px-3 py-1.5 bg-red-500 text-white rounded-lg text-xs font-bold hover:bg-red-600"
-                      >
-                        ⚔️ 攻撃側にセット
-                      </button>
-                      <button
-                        onClick={() => { onSelectDefender(selectedEntry.state, selectedEntry.moves); onClose(); }}
-                        className="px-3 py-1.5 bg-blue-500 text-white rounded-lg text-xs font-bold hover:bg-blue-600"
-                      >
-                        🛡️ 防御側にセット
-                      </button>
-                      <button
                         onClick={() => { onEdit(selectedEntry); onClose(); }}
                         className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-300"
                       >
                         ✏️ 編集
+                      </button>
+                      <button
+                        onClick={() => void copyEntryAsText(selectedEntry)}
+                        className="px-3 py-1.5 bg-gray-200 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-300"
+                      >
+                        文字情報に変換
                       </button>
                       <button
                         onClick={() => { onDelete(selectedEntry.id); setSelectedEntryId(null); }}
@@ -398,7 +406,7 @@ export default function BoxManager({ entries, onSelectAttacker, onSelectDefender
                             type="text"
                             className="bg-white/20 text-white font-bold px-2 py-0.5 rounded text-sm border border-white/30 placeholder-white/50"
                             value={team.name}
-                            onChange={(e) => setTeams(updateTeam(team.id, { name: e.target.value }))}
+                            onChange={(e) => onTeamsChange(updateTeam(team.id, { name: e.target.value }))}
                             placeholder="チーム名"
                           />
                         ) : (
@@ -414,7 +422,7 @@ export default function BoxManager({ entries, onSelectAttacker, onSelectDefender
                           {isEditing ? "完了" : "編集"}
                         </button>
                         <button
-                          onClick={() => { setTeams(deleteTeam(team.id)); }}
+                          onClick={() => { onTeamsChange(deleteTeam(team.id)); }}
                           className="px-2.5 py-1 rounded text-xs font-bold bg-purple-400 text-white hover:bg-red-400"
                         >
                           削除

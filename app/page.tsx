@@ -7,11 +7,11 @@ import { ITEMS, ITEM_MAP } from "@/lib/items";
 import { POPULAR_MOVE_SLUGS, MOVE_METADATA, SOUND_MOVES, POKEMON_MOVE_PRIORITY } from "@/lib/move-metadata";
 import { POKEMON_MOVE_USAGE } from "@/lib/move-usage";
 import { MOVE_NAMES_JA, getMoveJaName } from "@/lib/move-names";
-import { calcDamage } from "@/lib/damage";
+import { calcDamage, isGrounded } from "@/lib/damage";
 import { getDynamaxMove } from "@/lib/dynamax";
 import { getMegaForms, type MegaForm } from "@/lib/mega-data";
 import { fetchPokemon, fetchMove } from "@/lib/pokeapi";
-import { findPokemonCandidates, EN_TO_JA } from "@/lib/pokemon-names";
+import { findPokemonCandidates, EN_TO_JA, resolvePokemonJaName } from "@/lib/pokemon-names";
 import { getTypeEffectiveness } from "@/lib/type-chart";
 import { ALL_TYPES, ALL_TERA_TYPES, TYPE_NAMES_JA } from "@/lib/type-chart";
 import PokemonSearch from "@/components/PokemonSearch";
@@ -20,13 +20,18 @@ import { NumpadPopup } from "@/components/NumpadPopup";
 import MoveSelector from "@/components/MoveSelector";
 import DamageResultPanel, { inferBoosts, REVERSE_CANDIDATES } from "@/components/DamageResult";
 import TypeBadge from "@/components/TypeBadge";
-import { saveToBox, loadBox, deleteFromBox, updateBox, BoxEntry, importBoxFromShareString, mergeImportedBox } from "@/lib/box-storage";
-import { getAbilityJaName } from "@/lib/ability-names";
+import { saveToBox, loadBox, deleteFromBox, updateBox, loadTeams, BattleTeam, BoxEntry, importBoxFromShareString, mergeImportedBox } from "@/lib/box-storage";
+import { ABILITY_NAMES_JA, getAbilityJaName } from "@/lib/ability-names";
 import BoxManager from "@/components/BoxManager";
 import { useAuth } from "@/lib/auth-context";
-import { saveBoxToCloud, migrateLocalToCloud, subscribeToBoxChanges } from "@/lib/box-sync";
+import { saveCloudDataToCloud, migrateLocalToCloud, subscribeToCloudChanges } from "@/lib/box-sync";
 import { KanaKeyboard } from "@/components/KanaKeyboard";
 import { POKEMON_MASTER_DATA } from "@/lib/pokemon-master-data";
+import { findBestJaMatch, getJaMatchCandidates, normalizeJaText } from "@/lib/japanese-match";
+import { normalizeOcrActualStats, normalizeOcrEvs, parseJapaneseLabeledActualStats, parseStatLetterActualStats, parseStatLetterEvs } from "@/lib/ocr-ev";
+import { countParsedFields, inferNatureAndEvsFromActualStats, mergeParsedResults, type ParsedPokeText, type ParseSuggestions } from "@/lib/ocr-parser";
+import { formatPokemonText } from "@/lib/pokemon-text";
+import { copyText } from "@/lib/clipboard";
 
 // ───────────────────────────────────────
 // ツールチップ（汎用）
@@ -111,14 +116,36 @@ function calcStealthRockHp(hp: number, defTypes: PokemonType[], teraType: Pokemo
 }
 
 // まきびし ダメージ計算（ひこうタイプ・ふゆう持ちは無効）
-function calcSpikesHp(hp: number, layers: 0 | 1 | 2 | 3, types: PokemonType[], ability: string, teraType: PokemonType | null, isTerastallized: boolean): number {
+function calcSpikesHp(hp: number, layers: 0 | 1 | 2 | 3, types: PokemonType[], ability: string, item: string, teraType: PokemonType | null, isTerastallized: boolean): number {
   if (layers === 0) return 0;
-  const effectiveTypes = isTerastallized && teraType ? [teraType] : types;
-  // ひこうタイプまたはふゆう持ちは地面に接していないので無効
-  if (effectiveTypes.includes("flying") || ability === "levitate") return 0;
+  if (!isGrounded(types, ability, item, teraType, isTerastallized)) return 0;
   if (layers === 1) return Math.floor(hp / 8);
   if (layers === 2) return Math.floor(hp / 6);
   return Math.floor(hp / 4);
+}
+
+function getAbilityBoostedStat(
+  ability: string,
+  stats: { attack: number; defense: number; spAtk: number; spDef: number; speed: number } | null,
+  weather: WeatherCondition,
+  terrain: TerrainCondition
+): "attack" | "defense" | "spAtk" | "spDef" | "speed" | null {
+  if (!stats) return null;
+
+  const isProtoActive = ability === "protosynthesis" && weather === "sun";
+  const isQuarkActive = ability === "quark-drive" && terrain === "electric";
+  if (!isProtoActive && !isQuarkActive) return null;
+
+  const entries: Array<["attack" | "defense" | "spAtk" | "spDef" | "speed", number]> = [
+    ["attack", stats.attack],
+    ["defense", stats.defense],
+    ["spAtk", stats.spAtk],
+    ["spDef", stats.spDef],
+    ["speed", stats.speed],
+  ];
+  entries.sort((a, b) => b[1] - a[1]);
+
+  return entries[0]?.[0] ?? null;
 }
 
 const DEFAULT_STATE: PokemonState = {
@@ -212,7 +239,6 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
   const [numpadVal, setNumpadVal] = useState("0");
   const [numpadFresh, setNumpadFresh] = useState(true);
   // スクショ読み取り
-  const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [pasteError, setPasteError] = useState<string | null>(null);
   const [pasteLoading, setPasteLoading] = useState(false);
@@ -221,28 +247,80 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
   const [ocrError, setOcrError] = useState<string | null>(null);
   const [ocrPreview, setOcrPreview] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
-  const ocrInputRef = useRef<HTMLInputElement>(null);
+  const ocrFileInputRef = useRef<HTMLInputElement>(null);
+  const ocrCameraInputRef = useRef<HTMLInputElement>(null);
   // ポケモン候補選択
   const [pokeCandidates, setPokeCandidates] = useState<Array<{ name: string; ja: string }>>([]);
   const [pendingParsed, setPendingParsed] = useState<ReturnType<typeof parsePokeText> | null>(null);
+  const [parseSuggestions, setParseSuggestions] = useState<ParseSuggestions | null>(null);
 
   // ── 性格辞書（高速ルックアップ用Set）──
   const NATURE_JA_SET = useMemo(() => new Set(Object.values(NATURE_DATA).map((v) => v.ja)), []);
+  const NATURE_JA_LIST = useMemo(() => Object.values(NATURE_DATA).map((v) => v.ja), []);
   const NATURE_JA_TO_KEY = useMemo(() => Object.fromEntries(Object.entries(NATURE_DATA).map(([k, v]) => [v.ja, k])), []);
   // ── 技辞書（日本語名Set + 逆引き）──
   const MOVE_JA_SET = useMemo(() => new Set(Object.values(MOVE_NAMES_JA)), []);
+  const MOVE_JA_LIST = useMemo(() => Object.values(MOVE_NAMES_JA), []);
   // ── 持ち物辞書 ──
   const ITEM_JA_SET = useMemo(() => new Set(ITEMS.map((i) => i.ja)), []);
+  const ITEM_JA_LIST = useMemo(() => ITEMS.map((i) => i.ja), []);
   // ── タイプ名辞書 ──
   const TYPE_JA_SET = useMemo(() => new Set(Object.values(TYPE_NAMES_JA)), []);
+  const TYPE_JA_LIST = useMemo(() => Object.values(TYPE_NAMES_JA), []);
   // ── ポケモン名辞書（長い名前順にソート）──
   const POKEMON_JA_SORTED = useMemo(() => Object.values(EN_TO_JA).sort((a, b) => b.length - a.length), []);
+  const ABILITY_JA_LIST = useMemo(() => [...new Set(Object.values(ABILITY_NAMES_JA))], []);
+  const MOVE_USAGE_JA = useMemo(() => {
+    return Object.fromEntries(
+      Object.entries(POKEMON_MOVE_USAGE).map(([slug, moves]) => [
+        slug,
+        moves.map((move) => getMoveJaName(move)).filter((name) => name && !name.includes("-")),
+      ]),
+    ) as Record<string, string[]>;
+  }, []);
+  const inferPokemonFromTraits = useCallback((abilityJa: string, moveJas: string[]): string => {
+    if (!abilityJa && moveJas.length === 0) return "";
+
+    let bestName = "";
+    let bestScore = 0;
+    const candidateSlugs = new Set<string>([
+      ...Object.keys(POKEMON_MASTER_DATA),
+      ...Object.keys(POKEMON_MOVE_USAGE),
+    ]);
+
+    for (const slug of candidateSlugs) {
+      const master = POKEMON_MASTER_DATA[slug];
+      const jaName = master?.jaName ?? EN_TO_JA[slug];
+      if (!jaName) continue;
+      let score = 0;
+
+      if (abilityJa) {
+        const abilityNames = (master?.abilities ?? []).map((ability) => ABILITY_NAMES_JA[ability.slug]).filter(Boolean);
+        if (abilityNames.includes(abilityJa)) score += 4;
+      }
+
+      if (moveJas.length > 0) {
+        const moveSet = new Set<string>([
+          ...(master?.moves.map((move) => move.jaName) ?? []),
+          ...(MOVE_USAGE_JA[slug] ?? []),
+        ]);
+        for (const move of moveJas) {
+          if (moveSet.has(move)) score += 1;
+        }
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestName = jaName;
+      }
+    }
+
+    return bestScore >= 3 ? bestName : "";
+  }, [MOVE_USAGE_JA]);
+
 
   /** テキストをパースしてポケモン情報を抽出（コンテキスト推論付き） */
-  const parsePokeText = useCallback((raw: string): {
-    pokemonName: string; item: string; teraType: string; nature: string; ability: string;
-    evs: Record<string, number>; moves: string[]; filledCount: number;
-  } => {
+  const parsePokeText = useCallback((raw: string): ParsedPokeText => {
     // ── OCRノイズ前処理 ──
     let cleaned = raw
       .split(/\n/)
@@ -250,28 +328,53 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
       .join("\n")
       .replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
       .replace(/[（]/g, "(").replace(/[）]/g, ")")
-      .replace(/[,，][/／]/g, "@");
+      .replace(/[,，][/／]/g, "@")
+      .replace(/[＠﹫]/g, "@")
+      .replace(/[|｜]/g, "/")
+      .replace(/[“”]/g, "\"")
+      .replace(/[’]/g, "'");
 
     // 改行なしで繋がるケースに改行を挿入
     cleaned = cleaned
       .replace(/(テラス?タイプ)/g, "\n$1")
       .replace(/(特性[:：])/g, "\n$1")
       .replace(/(性格[:：])/g, "\n$1")
-      .replace(/(努力値)/g, "\n$1");
+      .replace(/(努力値[:：]?)/g, "\n$1")
+      .replace(/(持ち?物[:：])/g, "\n$1")
+      .replace(/(名前[:：]|ポケモン[:：])/g, "\n$1")
+      .replace(/(技[:：])/g, "\n$1");
 
     const lines = cleaned.split(/\n/).map((l) => l.trim()).filter(Boolean);
+    const isChampionsLayout = /pokemon\s*champions|能力ポイント|VP/i.test(raw) || /能力ポイント|VP/.test(cleaned);
 
     let pokemonName = "";
     let item = "";
     let teraType = "";
     let nature = "";
     let ability = "";
-    const evs: Record<string, number> = { hp: 0, attack: 0, defense: 0, spAtk: 0, spDef: 0, speed: 0 };
+    const evs: EVIVs = { hp: 0, attack: 0, defense: 0, spAtk: 0, spDef: 0, speed: 0 };
+    const actualStats: Partial<EVIVs> = {};
     const moves: string[] = [];
     let hasEvs = false;
     const unmatchedLines: string[] = []; // パターンに一致しなかった行
 
     for (const line of lines) {
+      const parsedLetterEvs = parseStatLetterEvs(line);
+      if (Object.keys(parsedLetterEvs).length > 0) {
+        Object.assign(evs, parsedLetterEvs);
+        hasEvs = true;
+        continue;
+      }
+
+      const parsedActualStats = parseStatLetterActualStats(line);
+      if (Object.keys(parsedActualStats).length >= 3) {
+        Object.assign(actualStats, parsedActualStats);
+      }
+      const parsedJapaneseActualStats = parseJapaneseLabeledActualStats(line);
+      if (Object.keys(parsedJapaneseActualStats).length > 0) {
+        Object.assign(actualStats, parsedJapaneseActualStats);
+      }
+
       // ── ポケモン名 @ 持ち物 テラス:タイプ ──
       if (line.includes("@") || line.includes("＠")) {
         const [pn, rest] = line.split(/[@＠]/);
@@ -286,6 +389,18 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
         }
         continue;
       }
+      // ── 名前 / ポケモン ──
+      const nameMatch = line.match(/^(?:名前|ポケモン)[:：](.+)/);
+      if (nameMatch) {
+        pokemonName = nameMatch[1].trim().replace(/\s*[\(（].*?[\)）]\s*/, "").replace(/\s/g, "");
+        continue;
+      }
+      // ── 持ち物 ──
+      const itemMatch = line.match(/^(?:持物|持ち物|もちもの)[:：](.+)/);
+      if (itemMatch) {
+        item = itemMatch[1].trim().replace(/\s/g, "");
+        continue;
+      }
       // ── テラスタイプ ──
       const teraMatch = line.match(/テラス?(?:タイプ)?[:：](.+)/);
       if (teraMatch) { teraType = teraMatch[1]; continue; }
@@ -295,26 +410,10 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
       // ── 性格（ラベル付き）──
       const natureMatch = line.match(/性格[:：](.+)/);
       if (natureMatch) { nature = natureMatch[1]; continue; }
-      // ── EV形式A: H252B236C4D4S12 ──
-      const evPatternA = line.match(/[HABCDS]\d+/g);
-      if (evPatternA && evPatternA.length >= 2) {
-        const MAP: Record<string, string> = { H: "hp", A: "attack", B: "defense", C: "spAtk", D: "spDef", S: "speed" };
-        for (const token of evPatternA) { const k = MAP[token[0]]; if (k) { evs[k] = parseInt(token.slice(1), 10); hasEvs = true; } }
-        continue;
-      }
-      // ── EV形式B: 努力値H252... ──
-      if (line.includes("努力値")) {
-        const evTokens = line.match(/[HABCDS]\d+/g);
-        if (evTokens) {
-          const MAP: Record<string, string> = { H: "hp", A: "attack", B: "defense", C: "spAtk", D: "spDef", S: "speed" };
-          for (const token of evTokens) { const k = MAP[token[0]]; if (k) { evs[k] = parseInt(token.slice(1), 10); hasEvs = true; } }
-        }
-        continue;
-      }
       // ── EV形式C: 191(124)-x-122(12)-204(+244)-136(4)-171(124) ──
       if (/\d+\([\+]?\d+\)/.test(line) && line.includes("-")) {
         const parts = line.split(/-/);
-        const keys = ["hp", "attack", "defense", "spAtk", "spDef", "speed"];
+        const keys: Array<keyof EVIVs> = ["hp", "attack", "defense", "spAtk", "spDef", "speed"];
         parts.forEach((p, i) => {
           if (i < keys.length) {
             const evMatch = p.match(/\(\+?(\d+)\)/);
@@ -324,16 +423,48 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
         continue;
       }
       if (/^実数値/.test(line)) continue;
-      // ── 技構成: 技名/技名/技名/技名 ──
-      if (line.includes("/") || line.includes("／")) {
-        const moveList = line.replace(/^(技構成|技)\s*/, "").split(/\s*[/／]\s*/).map((m) => m.replace(/\s/g, "")).filter(Boolean);
+      // ── 技構成: 技名/技名/技名/技名 or 技: 技名, 技名... ──
+      if (/^(技構成|技)[:：]?/.test(line) || line.includes("/") || line.includes("／") || line.includes(",")) {
+        const moveList = line
+          .replace(/^(技構成|技)[:：]?\s*/, "")
+          .split(/\s*[/／,，]\s*/)
+          .map((m) => m.replace(/\s/g, ""))
+          .filter(Boolean);
         moves.push(...moveList);
+        continue;
+      }
+      // ── 単独の技/持ち物/特性候補 ──
+      const normalizedLine = normalizeJaText(line);
+      const moveCandidate = findBestJaMatch(line, MOVE_JA_LIST);
+      if (moveCandidate && normalizeJaText(moveCandidate) === normalizedLine && moves.length < 4) {
+        moves.push(moveCandidate);
+        continue;
+      }
+      const itemCandidate = findBestJaMatch(line, ITEM_JA_LIST);
+      if (!item && itemCandidate && normalizeJaText(itemCandidate) === normalizedLine) {
+        item = itemCandidate;
+        continue;
+      }
+      const abilityCandidate = findBestJaMatch(line, ABILITY_JA_LIST);
+      if (!ability && abilityCandidate && normalizeJaText(abilityCandidate) === normalizedLine) {
+        ability = abilityCandidate;
         continue;
       }
       // ── 1行目がポケモン名のみ ──
       if (!pokemonName && lines.indexOf(line) === 0) {
-        pokemonName = line.replace(/\s*[\(（].*?[\)）]\s*/, "").replace(/\s/g, "");
-        continue;
+        const resolvedPokemon = resolvePokemonJaName(line.replace(/\s*[\(（].*?[\)）]\s*/, "").replace(/\s/g, ""));
+        if (resolvedPokemon) {
+          pokemonName = resolvedPokemon;
+          continue;
+        }
+      }
+      // ── 単独行のポケモン名候補 ──
+      if (!pokemonName) {
+        const resolvedPokemon = resolvePokemonJaName(line);
+        if (resolvedPokemon) {
+          pokemonName = resolvedPokemon;
+          continue;
+        }
       }
       // パターン不一致→後段のコンテキスト推論に回す
       unmatchedLines.push(line);
@@ -378,38 +509,111 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
     }
 
     // 【持ち物】テキスト全体から持ち物辞書と照合（長い名前を優先）
-    if (!item) {
-      const sortedItems = [...ITEMS].sort((a, b) => b.ja.length - a.ja.length);
-      for (const iObj of sortedItems) {
-        if (iObj.ja.length >= 3 && fullText.includes(iObj.ja)) { item = iObj.ja; break; }
-      }
-    }
-
-    // 【ポケモン名】テキスト全体からポケモン名辞書と照合（長い名前を優先）
-    if (!pokemonName) {
-      for (const pJa of POKEMON_JA_SORTED) {
-        if (pJa.length >= 2 && fullText.includes(pJa)) { pokemonName = pJa; break; }
-      }
-    }
-
-    // 【技】テキスト全体から技辞書と照合（3文字以上の技名を優先、最大4つ）
-    if (moves.length < 4) {
-      const sortedMoves = Object.values(MOVE_NAMES_JA).filter((m) => m.length >= 3).sort((a, b) => b.length - a.length);
-      for (const mJa of sortedMoves) {
-        if (fullText.includes(mJa) && !moves.includes(mJa)) {
-          moves.push(mJa);
-          if (moves.length >= 4) break;
+      if (!item) {
+        const sortedItems = [...ITEMS].sort((a, b) => b.ja.length - a.ja.length);
+        for (const iObj of sortedItems) {
+          if (iObj.ja.length >= 3 && fullText.includes(iObj.ja)) { item = iObj.ja; break; }
+        }
+        if (!item) {
+          item = findBestJaMatch(fullText, ITEM_JA_LIST, { maxDistance: 2 }) ?? "";
         }
       }
-    }
+
+    // 【ポケモン名】テキスト全体からポケモン名辞書と照合（長い名前を優先）
+      if (!pokemonName) {
+        for (const candidateLine of lines.slice(0, 3)) {
+          const resolvedPokemon = resolvePokemonJaName(candidateLine);
+          if (resolvedPokemon) {
+            pokemonName = resolvedPokemon;
+            break;
+          }
+        }
+      }
+      if (!pokemonName) {
+        for (const pJa of POKEMON_JA_SORTED) {
+          if (pJa.length >= 2 && fullText.includes(pJa)) { pokemonName = pJa; break; }
+        }
+      }
+      if (!pokemonName) {
+        for (const line of unmatchedLines) {
+          const resolvedPokemon = resolvePokemonJaName(line);
+          if (resolvedPokemon) {
+            pokemonName = resolvedPokemon;
+            break;
+          }
+        }
+      }
+      if (!pokemonName) {
+        pokemonName = findBestJaMatch(fullText, POKEMON_JA_SORTED, { maxDistance: 2 }) ?? "";
+      }
+      if (pokemonName) {
+        pokemonName = resolvePokemonJaName(pokemonName) ?? pokemonName;
+      }
+      if (!pokemonName && (ability || moves.length > 0)) {
+        const inferredPokemon = inferPokemonFromTraits(ability, moves);
+        if (inferredPokemon) {
+          pokemonName = inferredPokemon;
+        }
+      }
+
+    // 【技】テキスト全体から技辞書と照合（3文字以上の技名を優先、最大4つ）
+      if (moves.length < 4) {
+        const sortedMoves = Object.values(MOVE_NAMES_JA).filter((m) => m.length >= 3).sort((a, b) => b.length - a.length);
+        for (const mJa of sortedMoves) {
+          if (fullText.includes(mJa) && !moves.includes(mJa)) {
+            moves.push(mJa);
+            if (moves.length >= 4) break;
+          }
+        }
+      if (moves.length === 0) {
+          for (const line of unmatchedLines) {
+            const matchedMove = findBestJaMatch(line, MOVE_JA_LIST, { maxDistance: 2 });
+            if (matchedMove && !moves.includes(matchedMove)) {
+              moves.push(matchedMove);
+              if (moves.length >= 4) break;
+            }
+          }
+        }
+      }
+      if (!pokemonName && (ability || moves.length > 0)) {
+        const inferredPokemon = inferPokemonFromTraits(ability, moves);
+        if (inferredPokemon) {
+          pokemonName = inferredPokemon;
+        }
+      }
+
+      if (!ability) {
+        ability = findBestJaMatch(fullText, ABILITY_JA_LIST, { maxDistance: 2 }) ?? "";
+      }
+
+      if (!teraType) {
+        teraType = findBestJaMatch(fullText, TYPE_JA_LIST, { maxDistance: 1 }) ?? "";
+      }
+
+      if (!nature) {
+        nature = findBestJaMatch(fullText, NATURE_JA_LIST, { maxDistance: 1 }) ?? "";
+      }
 
     // 【EV】fullTextから「実数値(EV)-実数値(EV)-...」パターンを直接探す
+    if (!hasEvs) {
+      const parsedLetterEvs = parseStatLetterEvs(cleaned);
+      if (Object.keys(parsedLetterEvs).length > 0) {
+        Object.assign(evs, parsedLetterEvs);
+        hasEvs = true;
+      }
+    }
+
+    if (Object.keys(actualStats).length === 0) {
+      Object.assign(actualStats, parseStatLetterActualStats(cleaned));
+      Object.assign(actualStats, parseJapaneseLabeledActualStats(cleaned));
+    }
+
     if (!hasEvs) {
       // EV形式C全体を正規表現で探す: 数値またはx が - で6つ繋がる
       const evLineMatch = fullText.match(/(\d+\(\+?\d+\)|[xX×]|\d+)(-(\d+\(\+?\d+\)|[xX×]|\d+)){4,5}/);
       if (evLineMatch) {
         const parts = evLineMatch[0].split(/-/);
-        const keys = ["hp", "attack", "defense", "spAtk", "spDef", "speed"];
+        const keys: Array<keyof EVIVs> = ["hp", "attack", "defense", "spAtk", "spDef", "speed"];
         let foundAny = false;
         parts.forEach((p, i) => {
           if (i < keys.length) {
@@ -425,7 +629,7 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
         if (allParenNums.length >= 4 && allParenNums.length <= 6) {
           const sum = allParenNums.reduce((a, b) => a + b, 0);
           if (sum >= 4 && sum <= 510 && allParenNums.every((v) => v >= 0 && v <= 252)) {
-            const keys = ["hp", "attack", "defense", "spAtk", "spDef", "speed"];
+            const keys: Array<keyof EVIVs> = ["hp", "attack", "defense", "spAtk", "spDef", "speed"];
             allParenNums.forEach((v, i) => { if (i < 6) evs[keys[i]] = v; });
             hasEvs = true;
           }
@@ -438,7 +642,7 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
     // ════════════════════════════════════════
     const evTotal = Object.values(evs).reduce((a, b) => a + b, 0);
     if (evTotal > 510) {
-      Object.keys(evs).forEach((k) => { evs[k] = 0; });
+      (Object.keys(evs) as Array<keyof EVIVs>).forEach((k) => { evs[k] = 0; });
       hasEvs = false;
     }
 
@@ -452,12 +656,14 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
     if (hasEvs) filledCount++;
     if (moves.length > 0) filledCount++;
 
-    return { pokemonName, item, teraType, nature, ability, evs, moves, filledCount };
-  }, [NATURE_JA_SET, MOVE_JA_SET, ITEM_JA_SET, TYPE_JA_SET, POKEMON_JA_SORTED]);
+    return { pokemonName, item, teraType, nature, ability, evs, actualStats, moves, isChampionsLayout, filledCount };
+  }, [NATURE_JA_SET, NATURE_JA_LIST, MOVE_JA_SET, MOVE_JA_LIST, ITEM_JA_SET, ITEM_JA_LIST, TYPE_JA_SET, TYPE_JA_LIST, POKEMON_JA_SORTED, ABILITY_JA_LIST, inferPokemonFromTraits]);
 
   /** パース結果をフォームに部分反映する（読み取れた項目だけセット。失敗項目はスキップ） */
-  const applyParsedData = useCallback(async (parsed: ReturnType<typeof parsePokeText>): Promise<string[]> => {
+  const applyParsedData = useCallback(async (parsed: ParsedPokeText): Promise<string[]> => {
     const warnings: string[] = [];
+    const suggestions: ParseSuggestions = {};
+    let loadedPokemon: PokemonData | null = null;
 
     // ════ 漢字→正式名 共通変換テーブル（関数先頭で宣言）════
     const ABILITY_ALIAS: Record<string, string> = {
@@ -472,6 +678,7 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
       let pokeLoaded = false;
       try {
         const poke = await fetchPokemon(parsed.pokemonName);
+        loadedPokemon = poke;
         setNewRegPokemon(poke);
         setNewRegPokemonName(poke.japaneseName ?? poke.name);
         pokeLoaded = true;
@@ -502,10 +709,12 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
         if (candidates.length > 0) {
           setPokeCandidates(candidates);
           setPendingParsed(parsed);
+          suggestions.pokemon = candidates.slice(0, 5);
           if (candidates.length === 1) {
             // 候補が1つだけなら自動選択
             try {
               const poke = await fetchPokemon(candidates[0].name);
+              loadedPokemon = poke;
               setNewRegPokemon(poke);
               setNewRegPokemonName(poke.japaneseName ?? poke.name);
               pokeLoaded = true;
@@ -522,6 +731,8 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
         }
         if (!pokeLoaded && candidates.length <= 1) {
           warnings.push(`ポケモン「${parsed.pokemonName}」が見つかりません`);
+          const fallbackCandidates = findPokemonCandidates(parsed.pokemonName);
+          if (fallbackCandidates.length > 0) suggestions.pokemon = fallbackCandidates.slice(0, 5);
         }
       }
     }
@@ -572,12 +783,31 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
       const ne = Object.entries(NATURE_DATA).find(([, v]) => v.ja === nClean)
         || Object.entries(NATURE_DATA).find(([, v]) => nClean.includes(v.ja) || v.ja.includes(nClean));
       if (ne) setNewRegNature(ne[0] as Nature);
-      else warnings.push(`性格「${parsed.nature}」が不明`);
+      else {
+        warnings.push(`性格「${parsed.nature}」が不明`);
+        suggestions.nature = getJaMatchCandidates(parsed.nature, NATURE_JA_LIST, { maxDistance: 1, limit: 3 })
+          .map((ja) => NATURE_JA_TO_KEY[ja] as Nature)
+          .filter(Boolean);
+      }
     }
+
+    let resolvedNature = parsed.nature
+      ? (Object.entries(NATURE_DATA).find(([, v]) => v.ja === (NATURE_ALIAS[parsed.nature.replace(/\s/g, "")] ?? parsed.nature.replace(/\s/g, "")))?.[0] as Nature | undefined)
+      : undefined;
+
     // ── EV ──
     const totalEv = Object.values(parsed.evs).reduce((a, b) => a + b, 0);
-    if (totalEv > 0) {
+    if (!parsed.isChampionsLayout && totalEv > 0) {
       setNewRegEvs({ hp: parsed.evs.hp, attack: parsed.evs.attack, defense: parsed.evs.defense, spAtk: parsed.evs.spAtk, spDef: parsed.evs.spDef, speed: parsed.evs.speed });
+    } else if (!parsed.isChampionsLayout && loadedPokemon && Object.keys(parsed.actualStats).length > 0) {
+      const inferred = inferNatureAndEvsFromActualStats(loadedPokemon, parsed.actualStats, resolvedNature);
+      if (inferred) {
+        setNewRegEvs(inferred.evs);
+        if (!parsed.nature) {
+          setNewRegNature(inferred.nature);
+          resolvedNature = inferred.nature;
+        }
+      }
     }
     // ── 持ち物（漢字変換 → 完全一致 → 含む一致フォールバック）──
     if (parsed.item) {
@@ -586,7 +816,10 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
       const mi = ITEMS.find((i) => i.ja === iClean)
         || ITEMS.find((i) => iClean.includes(i.ja) || i.ja.includes(iClean));
       if (mi) setNewRegItem(mi.slug);
-      else warnings.push(`持ち物「${parsed.item}」が不明`);
+      else {
+        warnings.push(`持ち物「${parsed.item}」が不明`);
+        suggestions.item = getJaMatchCandidates(parsed.item, ITEM_JA_LIST, { maxDistance: 2, limit: 3 });
+      }
     }
     // ── テラタイプ（漢字変換 → 完全一致 → 含む一致フォールバック）──
     if (parsed.teraType) {
@@ -595,16 +828,29 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
       const te = Object.entries(TYPE_NAMES_JA).find(([, ja]) => ja === tClean)
         || Object.entries(TYPE_NAMES_JA).find(([, ja]) => tClean.includes(ja) || ja.includes(tClean));
       if (te) setNewRegTeraType(te[0] as PokemonType);
-      else warnings.push(`テラタイプ「${parsed.teraType}」が不明`);
+      else {
+        warnings.push(`テラタイプ「${parsed.teraType}」が不明`);
+        suggestions.teraType = getJaMatchCandidates(parsed.teraType, TYPE_JA_LIST, { maxDistance: 1, limit: 3 })
+          .map((ja) => Object.entries(TYPE_NAMES_JA).find(([, value]) => value === ja)?.[0] as PokemonType)
+          .filter(Boolean);
+      }
     }
     // ── 技（漢字変換 → 完全一致 → 含む一致フォールバック）──
     if (parsed.moves.length > 0) {
-      const slugs = parsed.moves.slice(0, 4).map((m) => {
+      const slugs = parsed.moves.slice(0, 4).map((m, index) => {
         let mClean = m.replace(/\s/g, "");
         mClean = MOVE_ALIAS[mClean] ?? mClean;
         const e = Object.entries(MOVE_NAMES_JA).find(([, ja]) => ja === mClean)
           || Object.entries(MOVE_NAMES_JA).find(([, ja]) => mClean.includes(ja) || ja.includes(mClean));
-        if (!e) warnings.push(`技「${m}」が不明`);
+        if (!e) {
+          warnings.push(`技「${m}」が不明`);
+          const options = getJaMatchCandidates(m, MOVE_JA_LIST, { maxDistance: 2, limit: 3 })
+            .map((ja) => Object.entries(MOVE_NAMES_JA).find(([, value]) => value === ja)?.[0] ?? "")
+            .filter(Boolean);
+          if (options.length > 0) {
+            suggestions.moves = [...(suggestions.moves ?? []), { index, options }];
+          }
+        }
         return e ? e[0] : "";
       });
       setNewRegMoves([slugs[0] || "", slugs[1] || "", slugs[2] || "", slugs[3] || ""]);
@@ -672,19 +918,17 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
       document.querySelector("[data-newreg-form]")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }, 100);
 
-    // ── 解析完了通知 ──
-    try {
-      const ctx = new AudioContext();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.frequency.value = 880; gain.gain.value = 0.15;
-      osc.start(); osc.stop(ctx.currentTime + 0.12);
-      setTimeout(() => { osc.frequency.value = 1320; const o2 = ctx.createOscillator(); const g2 = ctx.createGain(); o2.connect(g2); g2.connect(ctx.destination); o2.frequency.value = 1320; g2.gain.value = 0.12; o2.start(); o2.stop(ctx.currentTime + 0.15); }, 130);
-    } catch { /* AudioContext not available */ }
+    if (parsed.ability && warnings.some((warning) => warning.includes("特性"))) {
+      suggestions.ability = getJaMatchCandidates(parsed.ability, ABILITY_JA_LIST, { maxDistance: 2, limit: 3 });
+    }
+    setParseSuggestions(
+      Object.values(suggestions).some((value) => Array.isArray(value) && value.length > 0)
+        ? suggestions
+        : null
+    );
 
     return warnings;
-  }, []);
+  }, [ABILITY_JA_LIST, ITEM_JA_LIST, MOVE_JA_LIST, NATURE_JA_LIST, NATURE_JA_TO_KEY, TYPE_JA_LIST]);
 
   /** テキスト貼り付けからパース→自動入力 */
   const handleTextParse = useCallback(async (raw: string) => {
@@ -697,8 +941,6 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
         return;
       }
       const warnings = await applyParsedData(parsed);
-      // 1項目でも反映できたらペーストエリアを閉じる
-      setPasteOpen(false);
       setPasteText("");
       if (warnings.length > 0) {
         setPasteError(`一部の項目が不明: ${warnings.join("、")}`);
@@ -715,9 +957,9 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
 
   /**
    * スクショ解析:
-   * 1. まずClaude Vision APIを試行（ゲーム内画面・暗背景に強い）
-   * 2. APIキー未設定/エラー時 → Tesseract.jsローカルOCR + 正規表現パースにフォールバック
-   * → テキスト貼り付けと同じ parsePokeText() を使用するためAPIキー不要
+   * 1. まずTesseract.jsローカルOCRで解析（育成論画像・白背景テキストに強い）
+   * 2. ローカルOCRで項目が足りない場合のみClaude Vision APIで補完
+   * → サーバー側エラー時もローカルOCRだけで動作を継続する
    */
   const handleOcrFile = useCallback(async (file: File) => {
     setOcrError(null);
@@ -732,36 +974,67 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
       });
       setOcrPreview(dataUrl);
 
-      // ── 方法1: Claude Vision API ──
-      let usedApi = false;
+      // ── 方法1: Tesseract.jsローカルOCR ──
+      let localParsed: ReturnType<typeof parsePokeText> | null = null;
+      try {
+        const tesseractMod = await import("tesseract.js");
+        const Tesseract = tesseractMod.default ?? tesseractMod;
+        const { data } = await Tesseract.recognize(file, "jpn", { logger: () => {} });
+        const ocrText = data.text?.trim() ?? "";
+        if (ocrText.length >= 3) {
+          localParsed = parsePokeText(ocrText);
+        } else {
+          setPasteText("");
+        }
+      } catch {
+        // ローカルOCRに失敗してもAI補完を試す
+      }
+
+      if (localParsed && localParsed.filledCount >= 4) {
+        const warnings = await applyParsedData(localParsed);
+        setOcrLoading(false);
+        setPasteText("");
+        setTimeout(() => setOcrPreview(null), 2500);
+        if (warnings.length > 0) {
+          setOcrError(`${localParsed.filledCount}項目を解析して反映しました。不明: ${warnings.join("、")}`);
+        } else {
+          setSavedMessage(`✅ ${localParsed.filledCount}項目を解析して反映しました`);
+          setTimeout(() => setSavedMessage(null), 2500);
+        }
+        return;
+      }
+
+      // ── 方法2: Claude Vision APIで補完 ──
       try {
         const res = await fetch("/api/parse-screenshot", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ imageBase64: dataUrl, mediaType: file.type || "image/png" }),
         });
+
         if (res.ok) {
           const json = await res.json();
           if (!json.error && json.pokemonName) {
-            const evMap = json.evs || {};
-            const parsed = {
+            const evMap = normalizeOcrEvs(json.evs);
+            const actualStats = normalizeOcrActualStats(json.stats);
+            const apiParsed = {
               pokemonName: json.pokemonName || "",
               item: json.item || "",
               teraType: json.teraType || "",
               nature: json.nature || "",
               ability: json.ability || "",
-              evs: {
-                hp: evMap.hp ?? 0, attack: evMap.attack ?? 0, defense: evMap.defense ?? 0,
-                spAtk: evMap.spAtk ?? 0, spDef: evMap.spDef ?? 0, speed: evMap.speed ?? 0,
-              },
+              evs: { ...evMap },
+              actualStats,
               moves: (json.moves || []).filter(Boolean) as string[],
+              isChampionsLayout: /pokemon\s*champions|能力ポイント|VP/i.test(JSON.stringify(json)),
               filledCount: [json.pokemonName, json.item, json.teraType, json.nature, json.ability,
                 ...(json.moves || [])].filter(Boolean).length +
-                (Object.values(evMap).some((v: unknown) => v && v !== 0) ? 1 : 0),
+                ((Object.values(evMap).some((v: unknown) => v && v !== 0) || Object.keys(actualStats).length > 0) ? 1 : 0),
             };
+
+            const parsed = localParsed ? mergeParsedResults(apiParsed, localParsed) : apiParsed;
             const warnings = await applyParsedData(parsed);
             setOcrLoading(false);
-            setPasteOpen(false);
             setPasteText("");
             setTimeout(() => setOcrPreview(null), 2500);
             if (warnings.length > 0) {
@@ -770,46 +1043,30 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
               setSavedMessage(`✅ ${parsed.filledCount}項目をAIで解析して反映しました`);
               setTimeout(() => setSavedMessage(null), 2500);
             }
-            usedApi = true;
+            return;
           }
         }
-      } catch { /* APIキー未設定・ネットワークエラー → フォールバック */ }
-
-      if (usedApi) return;
-
-      // ── 方法2: Tesseract.jsローカルOCR + 正規表現パース（APIキー不要） ──
-      const Tesseract = await import("tesseract.js");
-      const { data } = await Tesseract.recognize(file, "jpn", { logger: () => {} });
-      const ocrText = data.text?.trim() ?? "";
-
-      if (ocrText.length < 3) {
-        setOcrError("画像からテキストを読み取れませんでした。テキストを直接貼り付けてお試しください。");
-        setOcrPreview(null);
-        setOcrLoading(false);
-        return;
+      } catch {
+        // AI APIが失敗してもローカルOCR結果があれば下で使う
       }
 
-      // 正規表現パース（APIキー不要）
-      const parsed = parsePokeText(ocrText);
-      const warnings = await applyParsedData(parsed);
       setOcrLoading(false);
-
-      if (parsed.filledCount === 0) {
-        setOcrPreview(null);
-        setPasteText(ocrText);
-        setPasteOpen(true);
-        setOcrError("自動解析できませんでした。テキストを修正して「解析して自動入力」を押してください。");
-      } else {
-        setPasteOpen(false);
+      if (localParsed && localParsed.filledCount > 0) {
+        const warnings = await applyParsedData(localParsed);
         setPasteText("");
         setTimeout(() => setOcrPreview(null), 2500);
         if (warnings.length > 0) {
-          setOcrError(`${parsed.filledCount}項目を解析して反映しました。不明: ${warnings.join("、")}`);
+          setOcrError(`${localParsed.filledCount}項目を解析して反映しました。不明: ${warnings.join("、")}`);
         } else {
-          setSavedMessage(`✅ ${parsed.filledCount}項目を解析して反映しました`);
+          setSavedMessage(`✅ ${localParsed.filledCount}項目を解析して反映しました`);
           setTimeout(() => setSavedMessage(null), 2500);
         }
+        return;
       }
+
+      setOcrPreview(null);
+      setPasteText("");
+      setOcrError("画像の解析に失敗しました。テキストから読込をお試しください。");
     } catch {
       setOcrError("画像の読み取りに失敗しました。テキストを直接貼り付けてお試しください。");
       setOcrPreview(null);
@@ -821,31 +1078,17 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
   const handleCandidateSelect = useCallback(async (candidate: { name: string; ja: string }) => {
     setPokeCandidates([]);
     try {
-      const poke = await fetchPokemon(candidate.name);
-      setNewRegPokemon(poke);
-      setNewRegPokemonName(poke.japaneseName ?? poke.name);
-      // pendingParsedから特性・型名を反映
       if (pendingParsed) {
-        if (pendingParsed.ability) {
-          const aClean = pendingParsed.ability.replace(/\s/g, "");
-          const matched = poke.abilities.find((a: { slug: string }) => getAbilityJaName(a.slug) === aClean)
-            || poke.abilities.find((a: { slug: string }) => { const jaName = getAbilityJaName(a.slug); return aClean.includes(jaName) || jaName.includes(aClean); });
-          if (matched) setNewRegAbility(matched.slug);
-          else setNewRegAbility(poke.abilities[0]?.slug ?? "");
-        } else {
-          setNewRegAbility(poke.abilities[0]?.slug ?? "");
-        }
-        // 型名を更新
-        const pokeName = poke.japaneseName ?? poke.name;
-        if (pendingParsed.item) {
-          const shortItem = pendingParsed.item.replace(/^とつげき/, "").replace(/^こだわり/, "");
-          setNewRegName(`${shortItem}${pokeName}`);
-        } else if (pendingParsed.nature) {
-          setNewRegName(`${pendingParsed.nature}${pokeName}`);
-        } else {
-          setNewRegName(pokeName);
-        }
+        const reparsed = { ...pendingParsed, pokemonName: candidate.ja };
         setPendingParsed(null);
+        const warnings = await applyParsedData(reparsed);
+        if (warnings.length > 0) {
+          setOcrError(`一部の項目が不明: ${warnings.join("、")}`);
+        }
+      } else {
+        const poke = await fetchPokemon(candidate.name);
+        setNewRegPokemon(poke);
+        setNewRegPokemonName(poke.japaneseName ?? poke.name);
       }
       // フォームにスクロール
       setTimeout(() => {
@@ -854,7 +1097,7 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
     } catch {
       setOcrError(`「${candidate.ja}」の読み込みに失敗しました`);
     }
-  }, [pendingParsed]);
+  }, [pendingParsed, applyParsedData]);
 
   const resetNewReg = () => {
     setEditingId(null);
@@ -878,6 +1121,11 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
     setNumpadVal("0");
     setNumpadFresh(true);
     setIsComposing(false);
+    setParseSuggestions(null);
+    setPasteError(null);
+    setOcrError(null);
+    setOcrPreview(null);
+    setIsDragOver(false);
   };
 
   const commitNewReg = () => {
@@ -911,6 +1159,37 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
     }
     resetNewReg();
     setTimeout(() => { setSavedMessage(null); }, 2000);
+  };
+
+  const copyNewRegAsText = async () => {
+    if (!newRegPokemon) return;
+    const state: PokemonState = {
+      pokemon: newRegPokemon,
+      level: newRegLevel,
+      nature: newRegNature,
+      ivs: DEFAULT_IVS,
+      evs: newRegEvs,
+      teraType: newRegTeraType,
+      isTerastallized: false,
+      isDynamaxed: false,
+      isMegaEvolved: false,
+      megaForm: null,
+      isBurned: false,
+      isCharged: false,
+      ability: newRegAbility || (newRegPokemon.abilities[0]?.slug ?? ""),
+      item: newRegItem,
+      statRanks: { attack: 0, spAtk: 0, defense: 0, spDef: 0 },
+      fieldConditions: { ...DEFAULT_FIELD },
+    };
+    const text = formatPokemonText(state, newRegMoves);
+    try {
+      const copied = await copyText(text);
+      if (!copied) throw new Error("copy failed");
+      setSavedMessage("✅ コピーが完了しました");
+      setTimeout(() => setSavedMessage(null), 2000);
+    } catch {
+      window.prompt("文字情報をコピーしてください", text);
+    }
   };
 
   const totalEvs = Object.values(newRegEvs).reduce((a, b) => a + b, 0);
@@ -1008,11 +1287,26 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
     }, 50);
   };
 
-  // PWA: Service Worker登録
+  // PWA: Service Worker登録（開発時は必ず解除＋Cache Storage 掃除。/_next を古くキャッシュすると Webpack が落ちる）
   useEffect(() => {
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    if (!("serviceWorker" in navigator)) return;
+
+    const host = window.location.hostname;
+    const isLocalhost = host === "localhost" || host === "127.0.0.1";
+
+    if (process.env.NODE_ENV !== "production" || isLocalhost) {
+      navigator.serviceWorker.getRegistrations()
+        .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
+        .catch(() => {});
+      if (typeof caches !== "undefined") {
+        caches.keys()
+          .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+          .catch(() => {});
+      }
+      return;
     }
+
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
   }, []);
 
 
@@ -1025,9 +1319,9 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
   }, [initialEditEntry, didAutoEdit]);
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-start justify-center pt-2 px-2">
+    <div className="fixed inset-0 z-[300] flex items-start justify-center px-2 pt-2 pb-2">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[98vh] flex flex-col" style={{borderRadius: '1rem'}}>
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[98vh] flex flex-col overflow-hidden" style={{borderRadius: '1rem'}}>
         {/* 保存完了トースト */}
         {savedMessage && (
           <div className="absolute inset-x-4 top-12 z-[400] flex items-center gap-2 bg-green-500 text-white text-sm font-bold px-4 py-2.5 rounded-xl shadow-lg animate-pulse pointer-events-none">
@@ -1041,61 +1335,6 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
           <h2 className="font-bold text-base">{editingId ? "ポケモンを編集" : "ポケモンを登録する"}</h2>
           <div className="flex items-center gap-2">
             <button onClick={onClose} className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/35 flex items-center justify-center font-bold transition-colors">✕</button>
-          </div>
-        </div>
-
-        {/* データ読み込みエリア */}
-        <div className="flex-shrink-0 border-b bg-gray-50 border-gray-200">
-          <div className="px-4 py-3 space-y-2">
-            {/* ポケモン候補選択UI */}
-            {pokeCandidates.length > 1 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
-                <p className="text-xs font-bold text-amber-800">該当するポケモンを選んでください</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {pokeCandidates.map((c) => (
-                    <button
-                      key={c.name}
-                      onClick={() => handleCandidateSelect(c)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-amber-300 text-amber-800 hover:bg-amber-100 active:bg-amber-200 transition-colors shadow-sm"
-                    >
-                      {c.ja}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* テキスト読み込みトグル */}
-            {!pasteOpen ? (
-              <button
-                onClick={() => setPasteOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors border bg-white text-blue-600 border-blue-300 hover:bg-blue-50"
-              >
-                テキストから読込
-              </button>
-            ) : (
-              <div className="space-y-2 bg-white rounded-lg p-3 border border-gray-200">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-gray-700">育成情報を貼り付け</span>
-                  <button onClick={() => { setPasteOpen(false); setPasteText(""); setPasteError(null); }} className="text-xs text-gray-400 hover:text-gray-600">閉じる</button>
-                </div>
-                <textarea
-                  value={pasteText}
-                  onChange={(e) => setPasteText(e.target.value)}
-                  placeholder={"コライドン @ こだわりハチマキ\nテラスタイプ: ほのお\n特性: ひひいろのこどう\n性格: ようき\n175-187(252)-136(4)-94-120-205(252)\nげきりん / インファイト / フレアドライブ / とんぼがえり"}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 resize-none"
-                  rows={5}
-                />
-                {pasteError && <p className="text-xs text-red-500">{pasteError}</p>}
-                <button
-                  onClick={() => handleTextParse(pasteText)}
-                  disabled={pasteLoading || !pasteText.trim()}
-                  className="w-full py-1.5 rounded-lg bg-blue-500 text-white text-xs font-bold hover:bg-blue-600 disabled:opacity-40 transition-colors"
-                >
-                  {pasteLoading ? "解析中..." : "解析して自動入力"}
-                </button>
-              </div>
-            )}
           </div>
         </div>
 
@@ -1119,7 +1358,6 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
               setEditingId(null);
             }}
           />
-          {/* ポケモン選択後のミニ情報 */}
           {newRegPokemon && (
             <div className="flex items-center gap-2 py-2">
               {newRegPokemon.spriteUrl && <img src={newRegPokemon.spriteUrl} alt="" className="w-8 h-8 object-contain" />}
@@ -1129,12 +1367,254 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
           )}
         </div>
 
-        {/* ── スクロール可能なフォーム本体 ── */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          {/* データ読み込みエリア */}
+          <div className="border-b bg-gray-50 border-gray-200">
+            <div className="px-4 py-3 space-y-2">
+            <input
+              ref={ocrFileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                void handleOcrFile(file);
+                e.currentTarget.value = "";
+              }}
+            />
+            <input
+              ref={ocrCameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                void handleOcrFile(file);
+                e.currentTarget.value = "";
+              }}
+            />
+
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setIsDragOver(true);
+              }}
+              onDragLeave={(e) => {
+                e.preventDefault();
+                setIsDragOver(false);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                setIsDragOver(false);
+                const file = Array.from(e.dataTransfer.files).find((entry) => entry.type.startsWith("image/"));
+                if (file) {
+                  void handleOcrFile(file);
+                } else {
+                  setOcrError("画像ファイルをドロップしてください");
+                }
+              }}
+              className={`rounded-xl border-2 border-dashed p-4 transition-colors ${
+                isDragOver
+                  ? "border-emerald-400 bg-emerald-50"
+                  : "border-gray-200 bg-white hover:bg-gray-50"
+              }`}
+            >
+              <p className="hidden font-bold text-gray-700 sm:block">スクショをここにドラッグ&ドロップ</p>
+              <p className="text-sm text-gray-500">育成画面の画像を入れると、ポケモン名・努力値・技・持ち物などを新規登録欄へ反映します</p>
+              {ocrLoading && <p className="mt-2 text-emerald-600">画像を解析しています...</p>}
+              {ocrError && <p className="mt-2 text-red-500">{ocrError}</p>}
+              <div className="mt-3 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => ocrFileInputRef.current?.click()}
+                  disabled={ocrLoading}
+                  className="rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-bold text-emerald-700 transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  写真を読み込む
+                </button>
+              </div>
+
+              {ocrPreview && (
+                <div className="mt-3 rounded-lg border border-gray-200 bg-gray-50 p-2">
+                  <p className="text-[11px] font-medium text-gray-600 mb-2">読み取り画像</p>
+                  <img src={ocrPreview} alt="OCR preview" className="max-h-40 w-auto mx-auto rounded-md object-contain" />
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-xl border-2 border-dashed border-gray-200 bg-white p-4">
+              <p className="mb-2 text-xs text-gray-500">いろいろな書き方に対応しています</p>
+              <textarea
+                value={pasteText}
+                onChange={(e) => setPasteText(e.target.value)}
+                placeholder={"名前: ポケモン名\n持物: もちもの名\nテラス: ノーマル\n特性: 特性名\n性格: 性格名\n努力値: H252 A0 B0 C252 D4 S0\n技: わざ1, わざ2, わざ3, わざ4"}
+                className="min-h-[196px] w-full resize-none rounded-xl border-2 border-dashed border-gray-200 bg-white px-4 py-3 text-sm leading-6 text-gray-700 placeholder:text-[clamp(13px,3.2vw,17px)] placeholder:leading-6 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-100"
+                rows={7}
+              />
+              {pasteError && <p className="mt-2 text-xs text-red-500">{pasteError}</p>}
+              <div className="mt-3 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (pasteLoading || !pasteText.trim()) return;
+                    handleTextParse(pasteText);
+                  }}
+                  aria-disabled={pasteLoading || !pasteText.trim()}
+                  className="rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-bold text-emerald-700 transition-colors hover:bg-emerald-50"
+                >
+                  {pasteLoading ? "解析中..." : "テキストを解析して自動入力"}
+                </button>
+              </div>
+            </div>
+
+            {/* ポケモン候補選択UI */}
+            {pokeCandidates.length > 1 && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 space-y-2">
+                <p className="text-xs font-bold text-amber-800">該当するポケモンを選んでください</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {pokeCandidates.map((c) => (
+                    <button
+                      key={c.name}
+                      onClick={() => handleCandidateSelect(c)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-amber-300 text-amber-800 hover:bg-amber-100 active:bg-amber-200 transition-colors shadow-sm"
+                    >
+                      {c.ja}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {parseSuggestions && (
+              <div className="bg-sky-50 border border-sky-200 rounded-xl p-3 space-y-2">
+                <p className="text-xs font-bold text-sky-800">読み取り候補</p>
+                {parseSuggestions.pokemon && parseSuggestions.pokemon.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-[11px] text-sky-700">ポケモン候補</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {parseSuggestions.pokemon.map((candidate) => (
+                        <button
+                          key={`suggest-pokemon-${candidate.name}`}
+                          onClick={() => handleCandidateSelect(candidate)}
+                          className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white border border-sky-300 text-sky-800 hover:bg-sky-100"
+                        >
+                          {candidate.ja}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {parseSuggestions.item && parseSuggestions.item.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-[11px] text-sky-700">持ち物候補</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {parseSuggestions.item.map((itemJa) => {
+                        const item = ITEMS.find((entry) => entry.ja === itemJa);
+                        if (!item) return null;
+                        return (
+                          <button
+                            key={`suggest-item-${item.slug}`}
+                            onClick={() => setNewRegItem(item.slug)}
+                            className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white border border-sky-300 text-sky-800 hover:bg-sky-100"
+                          >
+                            {itemJa}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {parseSuggestions.ability && parseSuggestions.ability.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-[11px] text-sky-700">特性候補</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {parseSuggestions.ability.map((abilityJa) => (
+                        <button
+                          key={`suggest-ability-${abilityJa}`}
+                          onClick={() => {
+                            if (!newRegPokemon) return;
+                            const matched = newRegPokemon.abilities.find((entry) => getAbilityJaName(entry.slug) === abilityJa);
+                            if (matched) setNewRegAbility(matched.slug);
+                          }}
+                          className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white border border-sky-300 text-sky-800 hover:bg-sky-100"
+                        >
+                          {abilityJa}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {parseSuggestions.nature && parseSuggestions.nature.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-[11px] text-sky-700">性格候補</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {parseSuggestions.nature.map((natureKey) => (
+                        <button
+                          key={`suggest-nature-${natureKey}`}
+                          onClick={() => setNewRegNature(natureKey)}
+                          className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white border border-sky-300 text-sky-800 hover:bg-sky-100"
+                        >
+                          {NATURE_DATA[natureKey].ja}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {parseSuggestions.teraType && parseSuggestions.teraType.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-[11px] text-sky-700">テラスタイプ候補</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {parseSuggestions.teraType.map((type) => (
+                        <button
+                          key={`suggest-tera-${type}`}
+                          onClick={() => setNewRegTeraType(type)}
+                          className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white border border-sky-300 text-sky-800 hover:bg-sky-100"
+                        >
+                          {TYPE_NAMES_JA[type]}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {parseSuggestions.moves && parseSuggestions.moves.length > 0 && (
+                  <div className="space-y-1">
+                    <p className="text-[11px] text-sky-700">技候補</p>
+                    <div className="space-y-1">
+                      {parseSuggestions.moves.map((entry) => (
+                        <div key={`suggest-move-${entry.index}`} className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-[11px] text-sky-700">技{entry.index + 1}</span>
+                          {entry.options.map((slug) => (
+                            <button
+                              key={`suggest-move-${entry.index}-${slug}`}
+                              onClick={() => {
+                                const next = [...newRegMoves];
+                                next[entry.index] = slug;
+                                setNewRegMoves(next);
+                              }}
+                              className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-white border border-sky-300 text-sky-800 hover:bg-sky-100"
+                            >
+                              {getMoveJa(slug)}
+                            </button>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            </div>
+          </div>
+
+          {/* ── スクロール可能なフォーム本体 ── */}
           {/* 新規登録フォーム（常に表示） */}
           {newRegPokemon && (
             <div className="bg-green-50 border-b border-green-100" data-newreg-form>
-              <div className="px-4 pt-2 pb-4 space-y-3">
+              <div className="px-4 pt-2 pb-28 space-y-3">
                   <>
                     {/* 登録名 */}
                     <div>
@@ -1534,14 +2014,22 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
                       )}
                     </div>
 
-                    {/* 保存ボタン */}
-                    <button
-                      onClick={commitNewReg}
-                      disabled={!newRegName.trim()}
-                      className="w-full py-2.5 rounded-xl bg-green-500 text-white disabled:opacity-40 hover:bg-green-600 font-bold text-sm transition-colors shadow-sm"
-                    >
-                      {editingId ? "💾 上書き保存" : "✅ 登録する"}
-                    </button>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      <button
+                        onClick={copyNewRegAsText}
+                        disabled={!newRegPokemon}
+                        className="w-full rounded-xl bg-gray-200 py-2.5 text-sm font-bold text-gray-700 transition-colors hover:bg-gray-300 disabled:opacity-40"
+                      >
+                        文字情報に変換
+                      </button>
+                      <button
+                        onClick={commitNewReg}
+                        disabled={!newRegName.trim()}
+                        className="w-full rounded-xl bg-green-500 py-2.5 text-sm font-bold text-white transition-colors shadow-sm hover:bg-green-600 disabled:opacity-40"
+                      >
+                        {editingId ? "上書き保存" : "登録する"}
+                      </button>
+                    </div>
                   </>
               </div>
             </div>
@@ -1636,6 +2124,7 @@ function CurrentHpEditor({
   const commitHp = (n: number) => {
     if (Number.isFinite(n) && n >= 1 && n <= maxHp) {
       const pct = Math.round((n / maxHp) * 1000) / 10;
+      setHpStr(String(n));
       setPctStr(String(pct));
       onChange(n >= maxHp ? null : n);
     }
@@ -1648,6 +2137,7 @@ function CurrentHpEditor({
     const p = parseFloat(str);
     if (Number.isFinite(p) && p > 0 && p <= 100) {
       const n = Math.max(1, Math.min(maxHp, Math.round((p / 100) * maxHp)));
+      setPctStr(String(Math.round(p * 10) / 10));
       setHpStr(String(n));
       onChange(n >= maxHp ? null : n);
     }
@@ -1749,59 +2239,122 @@ function CurrentHpEditor({
 
       {/* 双方向入力フィールド */}
       <div className="flex items-center gap-2">
-        {/* 実数値（テンキー付き） */}
+        {/* 実数値: スマホ=ネイティブテンキー / PC=カスタムNumpadPopup */}
         <div className="flex-1 min-w-0 flex-shrink-0 relative" ref={hpInputRef}>
           <input
-            type="text" inputMode="numeric" pattern="[0-9]*"
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            autoComplete="off"
+            className="md:hidden w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-center font-mono focus:outline-none focus:ring-2 focus:ring-red-400"
+            value={hpStr}
+            onChange={(e) => {
+              const raw = e.target.value.replace(/[^0-9]/g, "");
+              setHpStr(raw);
+              const n = parseInt(raw, 10);
+              if (Number.isFinite(n)) {
+                commitHp(Math.max(1, Math.min(maxHp, n)));
+              }
+            }}
+            onBlur={() => {
+              const n = parseInt(hpStr, 10);
+              if (!Number.isFinite(n) || hpStr.trim() === "") {
+                setHpStr(String(effectiveVal));
+                return;
+              }
+              commitHp(Math.max(1, Math.min(maxHp, n)));
+            }}
+            onFocus={() => setHpStr("")}
+          />
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
             value={hpStr}
             readOnly
             onClick={openHpNumpad}
             onFocus={(e) => { e.target.select(); }}
-            className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-center font-mono focus:outline-none focus:ring-2 focus:ring-red-400 cursor-pointer"
+            className="hidden md:block w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-center font-mono focus:outline-none focus:ring-2 focus:ring-red-400 cursor-pointer"
           />
           <p className="text-[10px] text-gray-400 text-center mt-0.5">実数値 / 最大 {maxHp}</p>
           {hpNumpadOpen && (
-            <NumpadPopup
-              value={hpNumpadStr}
-              maxLabel={String(maxHp)}
-              minLabel="1"
-              onDigit={handleHpDigit}
-              onClear={() => { setHpNumpadStr(""); setHpStr(""); }}
-              onMax={() => { const s = String(maxHp); setHpNumpadStr(s); setHpStr(s); commitHp(maxHp); }}
-              onMin={() => { setHpNumpadStr("1"); setHpStr("1"); commitHp(1); }}
-              pos={hpNumpadPos ?? undefined}
-              onClose={() => setHpNumpadOpen(false)}
-            />
+            <div className="hidden md:block">
+              <NumpadPopup
+                value={hpNumpadStr}
+                maxLabel={String(maxHp)}
+                minLabel="1"
+                onDigit={handleHpDigit}
+                onClear={() => { setHpNumpadStr(""); setHpStr(""); }}
+                onMax={() => { const s = String(maxHp); setHpNumpadStr(s); setHpStr(s); commitHp(maxHp); }}
+                onMin={() => { setHpNumpadStr("1"); setHpStr("1"); commitHp(1); }}
+                pos={hpNumpadPos ?? undefined}
+                onClose={() => setHpNumpadOpen(false)}
+              />
+            </div>
           )}
         </div>
 
         <span className="text-gray-300 text-xl font-light flex-shrink-0">/</span>
 
-        {/* パーセント（テンキー付き） */}
+        {/* 割合%: スマホ=ネイティブ / PC=カスタムNumpadPopup */}
         <div className="w-28 flex-shrink-0 relative" ref={pctInputRef}>
           <div className="flex items-center gap-1">
             <input
-              type="text" inputMode="numeric" pattern="[0-9]*"
+              type="text"
+              inputMode="decimal"
+              autoComplete="off"
+              className="md:hidden w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-center font-mono focus:outline-none focus:ring-2 focus:ring-red-400"
+              value={pctStr}
+              onChange={(e) => {
+                let raw = e.target.value.replace(/[^0-9.]/g, "");
+                const d = raw.indexOf(".");
+                if (d !== -1) {
+                  raw = raw.slice(0, d + 1) + raw.slice(d + 1).replace(/\./g, "");
+                  const [a, b = ""] = raw.split(".");
+                  raw = a + (b !== "" ? `.${b.slice(0, 1)}` : raw.endsWith(".") ? "." : "");
+                }
+                setPctStr(raw);
+                const p = parseFloat(raw);
+                if (Number.isFinite(p) && p > 0 && p <= 100) {
+                  commitPct(raw.replace(/\.$/, ""));
+                }
+              }}
+              onBlur={() => {
+                const p = parseFloat(pctStr);
+                if (!Number.isFinite(p) || pctStr.trim() === "" || p <= 0 || p > 100) {
+                  setPctStr(value == null ? "100" : String(Math.round((value / maxHp) * 1000) / 10));
+                  return;
+                }
+                commitPct(pctStr.replace(/\.$/, ""));
+              }}
+              onFocus={() => setPctStr("")}
+            />
+            <input
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={pctStr}
               readOnly
               onClick={openPctNumpad}
-              className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-center font-mono focus:outline-none focus:ring-2 focus:ring-red-400 cursor-pointer"
+              className="hidden md:block w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-center font-mono focus:outline-none focus:ring-2 focus:ring-red-400 cursor-pointer"
             />
             <span className="text-sm text-gray-500 flex-shrink-0 font-medium">%</span>
           </div>
           <p className="text-[10px] text-gray-400 text-center mt-0.5">割合</p>
           {pctNumpadOpen && (
-            <NumpadPopup
-              value={pctNumpadStr}
-              maxLabel="100"
-              minLabel="1"
-              onDigit={handlePctDigit}
-              onClear={() => { setPctNumpadStr(""); setPctStr(""); }}
-              onMax={() => { setPctNumpadStr("100"); setPctStr("100"); commitPct("100"); }}
-              onMin={() => { setPctNumpadStr("1"); setPctStr("1"); commitPct("1"); }}
-              pos={pctNumpadPos ?? undefined}
-              onClose={() => setPctNumpadOpen(false)}
-            />
+            <div className="hidden md:block">
+              <NumpadPopup
+                value={pctNumpadStr}
+                maxLabel="100"
+                minLabel="1"
+                onDigit={handlePctDigit}
+                onClear={() => { setPctNumpadStr(""); setPctStr(""); }}
+                onMax={() => { setPctNumpadStr("100"); setPctStr("100"); commitPct("100"); }}
+                onMin={() => { setPctNumpadStr("1"); setPctStr("1"); commitPct("1"); }}
+                pos={pctNumpadPos ?? undefined}
+                onClose={() => setPctNumpadOpen(false)}
+              />
+            </div>
           )}
         </div>
       </div>
@@ -1845,25 +2398,20 @@ function ReverseDamageSection({ rolls, defenderHp, minDamage, maxDamage, defende
   onApplyAtkEv?: (ev: number, natureMod: number) => void; // EV + 性格補正を適用
 }) {
   const [input, setInput] = useState("");
-  const [numpadOpen, setNumpadOpen] = useState(false);
   const [calcOpen, setCalcOpen] = useState(false);
   const [calcExpr, setCalcExpr] = useState("");
-  const ref = useRef<HTMLDivElement>(null);
   const num = parseInt(input, 10);
   const boosts = useMemo(() => (Number.isFinite(num) && num > 0 ? inferBoosts(num, rolls) : []), [num, rolls]);
   const pct = Number.isFinite(num) && num > 0 ? `${Math.round((num / defenderHp) * 1000) / 10}%` : null;
 
-  // テンキー表示中はbodyスクロール無効
-  useEffect(() => {
-    if (!numpadOpen) return;
-    document.body.style.overflow = "hidden";
-    const handler = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setNumpadOpen(false); };
-    document.addEventListener("mousedown", handler);
-    return () => { document.removeEventListener("mousedown", handler); document.body.style.overflow = ""; };
-  }, [numpadOpen]);
-
-  const handleDigit = (d: string) => {
-    setInput((prev) => { const next = prev + d; const n = parseInt(next, 10); return (isNaN(n) || n > 9999) ? prev : next; });
+  // ダメージ数値は inputMode=numeric で携帯のテンキーのみ（アプリ内テンキーは使わない）
+  const onDamageInputChange = (raw: string) => {
+    const digits = raw.replace(/[^0-9]/g, "");
+    let v = digits;
+    const n = parseInt(v, 10);
+    if (!isNaN(n) && n > 9999) v = "9999";
+    else if (v.length > 4) v = v.slice(0, 4);
+    setInput(v);
   };
 
   return (
@@ -1875,12 +2423,12 @@ function ReverseDamageSection({ rolls, defenderHp, minDamage, maxDamage, defende
           className={`text-[10px] px-2 py-0.5 rounded-md border font-medium transition-colors ${calcOpen ? "bg-gray-700 text-white border-gray-700" : "bg-white text-gray-500 border-gray-300 hover:bg-gray-50"}`}
         >🧮 電卓</button>
       </div>
-      {/* 簡易電卓（フローティング・上方向に展開） */}
+      {/* 簡易電卓（スマホでは画面下、PCではボタン下に展開） */}
       {calcOpen && (
         <div className="relative">
         {/* 背景オーバーレイ: 電卓の外をタップで閉じる */}
         <div className="fixed inset-0 z-40" onClick={() => setCalcOpen(false)} />
-        <div className="absolute bottom-0 right-0 z-50 bg-white border border-gray-300 rounded-xl shadow-2xl p-2.5 space-y-1.5 w-52">
+        <div className="fixed bottom-4 left-1/2 z-50 w-[min(20rem,calc(100vw-1.5rem))] -translate-x-1/2 bg-white border border-gray-300 rounded-xl shadow-2xl p-2.5 space-y-1.5 md:absolute md:bottom-auto md:top-full md:right-0 md:left-auto md:w-52 md:translate-x-0">
           <div className="text-right text-sm font-mono bg-white border border-gray-200 rounded px-2 py-1 min-h-[1.8rem] text-gray-800">
             {calcExpr || <span className="text-gray-300">0</span>}
           </div>
@@ -1915,51 +2463,18 @@ function ReverseDamageSection({ rolls, defenderHp, minDamage, maxDamage, defende
         </div>
         </div>
       )}
-      <div className="flex items-center gap-2" ref={ref}>
+      <div className="flex items-center gap-2">
         <div className="relative flex-1">
           <input
-            type="text" inputMode="numeric" pattern="[0-9]*" readOnly={numpadOpen} value={input}
-            onChange={(e) => setInput(e.target.value.replace(/[^0-9]/g, ""))}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            autoComplete="off"
+            value={input}
+            onChange={(e) => onDamageInputChange(e.target.value)}
             placeholder="ダメージ数値"
-            className={`w-full border rounded-lg px-2 py-1 text-sm transition-colors focus:outline-none ${
-              numpadOpen ? "border-purple-400 ring-1 ring-purple-200 bg-purple-50 text-purple-900" : "border-gray-300 hover:border-purple-300 text-gray-700"
-            }`}
-            onClick={() => { if (!numpadOpen) { setInput(""); setNumpadOpen(true); } }}
-            onKeyDown={(e) => {
-              if (/^[0-9]$/.test(e.key)) { e.preventDefault(); handleDigit(e.key); }
-              else if (e.key === "Backspace") { e.preventDefault(); setInput((p) => p.slice(0, -1)); }
-              else if (e.key === "Escape" || e.key === "Enter") { e.preventDefault(); setNumpadOpen(false); }
-            }}
+            className="w-full border rounded-lg px-2 py-1 text-sm transition-colors focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-200 border-gray-300 hover:border-purple-300 text-gray-700"
           />
-          {numpadOpen && (
-            <>
-              {/* 背景オーバーレイ（テンキー外タップで閉じる + スクロール/タッチ完全ブロック） */}
-              <div className="fixed inset-0 z-[199]"
-                onMouseDown={() => setNumpadOpen(false)}
-                onTouchStart={(e) => { e.preventDefault(); setNumpadOpen(false); }}
-                onTouchMove={(e) => e.preventDefault()}
-                onWheel={(e) => e.preventDefault()}
-              />
-              <div className="absolute z-[200] bg-white border border-gray-300 rounded-xl shadow-2xl p-2 w-40 bottom-full mb-1 left-0"
-                onTouchMove={(e) => e.preventDefault()}>
-                <div className="text-center text-lg font-bold text-gray-800 bg-gray-50 border border-gray-100 rounded-lg px-2 py-0.5 mb-1.5 min-h-[2rem]">
-                  {input !== "" ? input : <span className="text-gray-300 text-sm">入力</span>}
-                </div>
-                <div className="grid grid-cols-3 gap-1 mb-1">
-                  {[7,8,9,4,5,6,1,2,3].map((d) => (
-                    <button key={d} className="flex items-center justify-center rounded-lg border border-gray-200 bg-white hover:bg-gray-100 font-semibold text-sm h-8 cursor-pointer select-none"
-                      onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleDigit(String(d)); }}>{d}</button>
-                  ))}
-                  <button className="flex items-center justify-center rounded-lg border border-gray-200 bg-white hover:bg-gray-100 font-semibold text-sm h-8 cursor-pointer select-none"
-                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); handleDigit("0"); }}>0</button>
-                  <button className="col-span-2 flex items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 font-semibold text-sm h-8 cursor-pointer select-none"
-                    onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setInput(""); }}>CLR</button>
-                </div>
-                <button className="w-full py-1 rounded-lg border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 text-sm font-semibold transition-colors"
-                  onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); setNumpadOpen(false); }}>確定</button>
-              </div>
-            </>
-          )}
         </div>
         {pct && <span className="text-xs font-medium text-gray-500 whitespace-nowrap">= {pct}</span>}
       </div>
@@ -2266,6 +2781,7 @@ export default function Home() {
     }
     return loadBox();
   });
+  const [battleTeams, setBattleTeams] = useState<BattleTeam[]>(() => loadTeams());
 
   // Supabase同期: ログイン時にクラウドからデータを読み込み＆リアルタイム同期
   const syncInProgress = useRef(false);
@@ -2274,29 +2790,40 @@ export default function Home() {
     syncInProgress.current = true;
     // ログイン時: LocalStorageとクラウドをマージ
     migrateLocalToCloud(user.id).then((merged) => {
-      setBoxEntries(merged);
-      // LocalStorageにも反映
-      localStorage.setItem("pokemon-dmg-box-v1", JSON.stringify(merged));
+      setBoxEntries(merged.entries);
+      setBattleTeams(merged.teams);
+      localStorage.setItem("pokemon-dmg-box-v1", JSON.stringify(merged.entries));
+      localStorage.setItem("pokemon-dmg-teams-v1", JSON.stringify(merged.teams));
       syncInProgress.current = false;
     }).catch((err) => { console.error("[box-sync] migration failed:", err); syncInProgress.current = false; });
 
     // リアルタイム同期: 別デバイスからの変更を監視
-    const unsubscribe = subscribeToBoxChanges(user.id, (cloudEntries) => {
-      setBoxEntries(cloudEntries);
-      localStorage.setItem("pokemon-dmg-box-v1", JSON.stringify(cloudEntries));
+    const unsubscribe = subscribeToCloudChanges(user.id, (cloudData) => {
+      setBoxEntries(cloudData.entries);
+      setBattleTeams(cloudData.teams);
+      localStorage.setItem("pokemon-dmg-box-v1", JSON.stringify(cloudData.entries));
+      localStorage.setItem("pokemon-dmg-teams-v1", JSON.stringify(cloudData.teams));
     });
     return unsubscribe;
   }, [user]);
 
-  // ボックスデータ変更時にクラウドにも保存
-  const prevBoxRef = useRef<string>("");
+  // ボックス・バトルチーム変更時にクラウドにも保存
+  const prevSyncRef = useRef<string>("");
   useEffect(() => {
-    if (!user) return;
-    const json = JSON.stringify(boxEntries);
-    if (json === prevBoxRef.current) return; // 同じデータはスキップ
-    prevBoxRef.current = json;
-    saveBoxToCloud(user.id, boxEntries);
-  }, [boxEntries, user]);
+    if (!user || syncInProgress.current) return;
+    const json = JSON.stringify({ entries: boxEntries, teams: battleTeams });
+    if (json === prevSyncRef.current) return; // 同じデータはスキップ
+    prevSyncRef.current = json;
+    saveCloudDataToCloud(user.id, { entries: boxEntries, teams: battleTeams });
+  }, [boxEntries, battleTeams, user]);
+
+  useEffect(() => {
+    localStorage.setItem("pokemon-dmg-box-v1", JSON.stringify(boxEntries));
+  }, [boxEntries]);
+
+  useEffect(() => {
+    localStorage.setItem("pokemon-dmg-teams-v1", JSON.stringify(battleTeams));
+  }, [battleTeams]);
 
   const [initialEditEntry, setInitialEditEntry] = useState<BoxEntry | null>(null);
   // 登録ポケモンから呼び出した場合の登録済み技（攻撃側のみ）
@@ -2399,6 +2926,20 @@ export default function Home() {
    */
   const effectiveMove = useMemo((): MoveData | null => {
     if (!selectedMove) return null;
+    if (selectedMove.name === "weather-ball") {
+      let type: PokemonType = "normal";
+      let power = 50;
+      if (weather === "sun") { type = "fire"; power = 100; }
+      else if (weather === "rain") { type = "water"; power = 100; }
+      else if (weather === "sand") { type = "rock"; power = 100; }
+      else if (weather === "snow") { type = "ice"; power = 100; }
+      return {
+        ...selectedMove,
+        type,
+        power,
+        japaneseName: weather === "none" ? selectedMove.japaneseName : `${selectedMove.japaneseName}(${TYPE_NAMES_JA[type]})`,
+      };
+    }
     if (selectedMove.name !== "tera-blast") return selectedMove;
     if (!attacker.isTerastallized || !attacker.teraType) return selectedMove;
     if (!attackerStats) return selectedMove;
@@ -2416,9 +2957,11 @@ export default function Home() {
     if (ab === "gorilla-tactics")                               atkEff   *= 1.5;
     if (ab === "orichalcum-pulse" && weather === "sun")         atkEff   *= 4 / 3;
     if (ab === "hadron-engine"    && terrain === "electric")    spAtkEff *= 4 / 3;
-    if ((ab === "protosynthesis"  && weather === "sun") ||
-        (ab === "quark-drive"     && terrain === "electric")) {
-      atkEff *= 1.3; spAtkEff *= 1.3;
+    const boostedStat = getAbilityBoostedStat(ab, attackerStats, weather, terrain);
+    if (boostedStat === "attack") atkEff *= 1.3;
+    if (boostedStat === "spAtk") spAtkEff *= 1.3;
+    if (boostedStat === "attack" || boostedStat === "spAtk") {
+      // 攻撃と特攻のどちらが実際にブーストされるかだけ反映する
     }
 
     const category: MoveCategory = atkEff > spAtkEff ? "physical" : "special";
@@ -2471,7 +3014,12 @@ export default function Home() {
       atkStat = category === "special" ? useStats.spAtk : useStats.attack;
       atkRank = attacker.statRanks[category === "special" ? "spAtk" : "attack"];
     }
-    const defStat = category === "special" ? defenderStats.spDef : defenderStats.defense;
+    const defStat =
+      meta?.defenseStatOverride === "defense"
+        ? defenderStats.defense
+        : category === "special"
+          ? defenderStats.spDef
+          : defenderStats.defense;
 
     const result = calcDamage({
       attackerLevel: attacker.level,
@@ -2494,7 +3042,7 @@ export default function Home() {
       attackerAbility: attacker.ability,
       defenderAbility: defender.ability,
       attackerRank: atkRank,
-      defenderRank: defender.statRanks[category === "special" ? "spDef" : "defense"],
+      defenderRank: defender.statRanks[meta?.defenseStatOverride === "defense" ? "defense" : category === "special" ? "spDef" : "defense"],
       isCharged: attacker.isCharged,
       defenderField: defender.fieldConditions,
       hitCount,
@@ -2504,6 +3052,9 @@ export default function Home() {
       attackerWeight: attacker.pokemon?.weight,
       defenderWeight: defender.pokemon?.weight,
       isPaybackDoubled,
+      attackerIsGrounded: isGrounded(attacker.pokemon.types, attacker.ability, attacker.item, attacker.teraType, attacker.isTerastallized),
+      defenderIsGrounded: isGrounded(defender.pokemon.types, defender.ability, defender.item, defender.teraType, defender.isTerastallized),
+      attackerAbilityBoostedStat: getAbilityBoostedStat(attacker.ability, useStats, weather, terrain),
     });
 
     // みがわりシミュレーション
@@ -2567,18 +3118,22 @@ export default function Home() {
     else { atkStat = category === "special" ? useStats.spAtk : useStats.attack; atkRank = attacker.statRanks[category === "special" ? "spAtk" : "attack"]; }
     return calcDamage({
       attackerLevel: attacker.level, move: selectedMove2,
-      attackStat: atkStat, defenseStat: category === "special" ? defenderStats.spDef : defenderStats.defense,
+      attackStat: atkStat,
+      defenseStat: meta2?.defenseStatOverride === "defense" ? defenderStats.defense : category === "special" ? defenderStats.spDef : defenderStats.defense,
       defenderHp: defenderStats.hp, attackerTypes: attacker.pokemon.types, defenderTypes: defender.pokemon.types,
       attackerTeraType: attacker.teraType, isTerastallized: attacker.isTerastallized,
       defenderTeraType: defender.teraType, defenderTerastallized: defender.isTerastallized,
       isCritical: isCritical2, isBurned: attacker.isBurned, weather, terrain,
       attackerItem: attacker.item, defenderItem: defender.item,
       attackerAbility: attacker.ability, defenderAbility: defender.ability,
-      attackerRank: atkRank, defenderRank: defender.statRanks[category === "special" ? "spDef" : "defense"],
+      attackerRank: atkRank, defenderRank: defender.statRanks[meta2?.defenseStatOverride === "defense" ? "defense" : category === "special" ? "spDef" : "defense"],
       isCharged: attacker.isCharged, defenderField: defender.fieldConditions,
       hitCount: hitCount2, critCount: critCount2,
       isDefenderFullHp: false, isDefenderDynamaxed: defender.isDynamaxed,
       attackerWeight: attacker.pokemon?.weight, defenderWeight: defender.pokemon?.weight,
+      attackerIsGrounded: isGrounded(attacker.pokemon.types, attacker.ability, attacker.item, attacker.teraType, attacker.isTerastallized),
+      defenderIsGrounded: isGrounded(defender.pokemon.types, defender.ability, defender.item, defender.teraType, defender.isTerastallized),
+      attackerAbilityBoostedStat: getAbilityBoostedStat(attacker.ability, useStats, weather, terrain),
     });
   }, [showSecondAttack, selectedMove2, attacker, defender, attackerStats, megaAttackerStats, defenderStats, isCritical2, weather, terrain, hitCount2, critCount2]);
 
@@ -2590,7 +3145,7 @@ export default function Home() {
       ? calcStealthRockHp(defenderStats.hp, defender.pokemon.types, defender.teraType, defender.isTerastallized)
       : null;
     const spDmg = f.spikesLayers > 0
-      ? calcSpikesHp(defenderStats.hp, f.spikesLayers, defender.pokemon.types, defender.ability, defender.teraType, defender.isTerastallized)
+      ? calcSpikesHp(defenderStats.hp, f.spikesLayers, defender.pokemon.types, defender.ability, defender.item, defender.teraType, defender.isTerastallized)
       : null;
     if (srDmg == null && spDmg == null) return null;
     // spikesLayers > 0 だがダメージ0（ひこうタイプ等）の場合もspikesImmuneフラグを立てる
@@ -2624,7 +3179,7 @@ export default function Home() {
     <div className="min-h-screen">
       {/* ヘッダー */}
       <header className="bg-white shadow-sm" style={{ borderBottom: "1px solid #e0e0e0" }}>
-        <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-3 py-3 flex items-center justify-between gap-2 sm:px-4">
           <button
             onClick={() => {
               setAttacker(DEFAULT_STATE);
@@ -2636,23 +3191,26 @@ export default function Home() {
               setAttackerRegMoves([]);
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}
-            className="text-left hover:opacity-80 active:opacity-60 transition-opacity"
+            className="min-w-0 flex-1 text-left hover:opacity-80 active:opacity-60 transition-opacity"
           >
-            <h1 className="text-base sm:text-xl font-extrabold tracking-tight leading-tight" style={{ color: "#1a1a1a" }}>ポケモン ダメージ計算機</h1>
-            <p className="text-[10px] sm:text-[11px] font-medium tracking-wide" style={{ color: "#aaa" }}>Pokémon Champions対応</p>
+            <h1 className="text-[11px] sm:text-xl font-extrabold tracking-tight leading-tight whitespace-nowrap" style={{ color: "#1a1a1a" }}><span className="hidden sm:inline">ポケモン </span>ダメージ計算機</h1>
+            <p className="text-[9px] sm:text-[11px] font-medium tracking-wide" style={{ color: "#aaa" }}>Pokémon Champions</p>
           </button>
-          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+          <div className="flex items-center justify-end gap-1 sm:gap-2 flex-shrink-0">
+            {/* ヘッダー共通ボタン */}
             {/* ボックスボタン */}
             <button
               onClick={() => { if (!user) setBoxEntries(loadBox()); setBoxManagerOpen(true); }}
-              className="flex items-center gap-1 px-2.5 sm:px-4 py-1.5 rounded-md text-xs sm:text-sm font-medium transition-colors hover:opacity-90 active:opacity-80" style={{ backgroundColor: "#1e88e5", color: "#fff" }}
+              className="flex items-center gap-1 px-1 sm:px-4 py-1 sm:py-1.5 rounded-md text-[9px] sm:text-sm font-medium transition-colors whitespace-nowrap hover:bg-gray-100 active:bg-gray-100 border"
+              style={{ backgroundColor: "#fff", color: "#1e88e5", borderColor: "#1e88e5" }}
             >
               ボックス
             </button>
             {/* 常設ポケモン登録ボタン */}
             <button
               onClick={() => setRegModalOpen(true)}
-              className="flex items-center gap-1 px-2.5 sm:px-4 py-1.5 rounded-md text-[11px] sm:text-xs font-medium transition-colors whitespace-nowrap hover:opacity-90 active:opacity-80 border" style={{ backgroundColor: "#fff", color: "#1e88e5", borderColor: "#1e88e5" }}
+              className="flex items-center gap-1 px-1 sm:px-4 py-1 sm:py-1.5 rounded-md text-[8px] sm:text-xs font-medium transition-colors whitespace-nowrap hover:bg-gray-100 active:bg-gray-100 border"
+              style={{ backgroundColor: "#fff", color: "#1e88e5", borderColor: "#1e88e5" }}
             >
               ポケモン登録＋
             </button>
@@ -2661,17 +3219,19 @@ export default function Home() {
               user ? (
                 <button
                   onClick={signOut}
-                  className="flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-md text-[10px] sm:text-xs font-medium transition-colors hover:bg-gray-100" style={{ color: "#666" }}
+                  className="flex items-center gap-1 px-1 sm:px-3 py-1 sm:py-1.5 rounded-md text-[8px] sm:text-xs font-medium transition-colors whitespace-nowrap hover:bg-gray-100 active:bg-gray-100 border"
+                  style={{ backgroundColor: "#fff", color: "#1e88e5", borderColor: "#1e88e5" }}
                   title={user.email ?? ""}
                 >
-                  <span className="text-gray-400">ログアウト</span>
+                  ログアウト
                 </button>
               ) : (
                 <button
                   onClick={() => setLoginOpen(true)}
-                  className="flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-md text-[10px] sm:text-xs font-medium transition-colors hover:bg-gray-100 border" style={{ borderColor: "#ddd", color: "#555" }}
+                  className="flex items-center gap-1 px-1 sm:px-3 py-1 sm:py-1.5 rounded-md text-[8px] sm:text-xs font-medium transition-colors whitespace-nowrap hover:bg-gray-100 active:bg-gray-100 border"
+                  style={{ backgroundColor: "#fff", color: "#1e88e5", borderColor: "#1e88e5" }}
                 >
-                  ✉ ログイン
+                  ログイン
                 </button>
               )
             )}
@@ -2681,6 +3241,13 @@ export default function Home() {
                 <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-sm mx-4 space-y-3" onClick={(e) => e.stopPropagation()}>
                   <h3 className="text-sm font-bold text-gray-700">メールでログイン</h3>
                   <p className="text-[11px] text-gray-500">メールアドレスにログインリンクを送信します。パスワード不要です。</p>
+                  <p className="whitespace-pre-line rounded-lg bg-blue-50 px-3 py-2 text-[11px] leading-relaxed text-blue-700">
+                    同じメールアドレスでログインすると、
+                    {"\n"}
+                    複数の端末でデータが共有されます。
+                    {"\n\n"}
+                    同期は自動で行われます。
+                  </p>
                   <input
                     type="email"
                     placeholder="メールアドレス"
@@ -2733,10 +3300,22 @@ export default function Home() {
       {boxManagerOpen && (
         <BoxManager
           entries={boxEntries}
+          teams={battleTeams}
           onSelectAttacker={(s, moves) => { setAttacker(s); handleMoveSelect(null); setAttackerRegMoves(moves ?? []); }}
           onSelectDefender={(s) => { setDefender(s); setDefenderCurrentHp(null); }}
           onEdit={(entry) => { setBoxManagerOpen(false); setInitialEditEntry(entry); setRegModalOpen(true); }}
-          onDelete={(id) => { const next = deleteFromBox(id); setBoxEntries(next); }}
+          onDelete={(id) => {
+            const next = deleteFromBox(id);
+            setBoxEntries(next);
+            setBattleTeams((prev) =>
+              prev.map((team) => ({
+                ...team,
+                memberIds: team.memberIds.filter((memberId) => memberId !== id),
+                updatedAt: Date.now(),
+              }))
+            );
+          }}
+          onTeamsChange={setBattleTeams}
           onClose={() => setBoxManagerOpen(false)}
         />
       )}
@@ -2774,6 +3353,8 @@ export default function Home() {
             critCount={critCount}
             onCritCountChange={setCritCount}
             onLoadFromBox={(s, moves) => { setAttacker(s); handleMoveSelect(null); setAttackerRegMoves(moves ?? []); }}
+            boxEntries={boxEntries}
+            battleTeams={battleTeams}
             registeredMoves={attackerRegMoves}
             weather={weather}
             onWeatherChange={setWeather}
@@ -2827,7 +3408,7 @@ export default function Home() {
               <span key={t.value} className="inline-flex items-center">
                 <button onClick={() => setTerrain(t.value)}
                   className={`text-[10px] px-1.5 py-0.5 rounded-full border transition-colors ${
-                    terrain === t.value ? "bg-green-500 text-white border-green-500" : "border-gray-200 text-gray-500 hover:border-green-300"
+                    terrain === t.value ? "bg-sky-500 text-white border-sky-500" : "border-gray-200 text-gray-500 hover:border-sky-300"
                   }`}>
                   {t.label}
                 </button>
@@ -2850,6 +3431,8 @@ export default function Home() {
               showFieldConditions={true}
               selectedMove={effectiveMove}
               onLoadFromBox={(s) => { setDefender(s); setDefenderCurrentHp(null); }}
+              boxEntries={boxEntries}
+              battleTeams={battleTeams}
               currentHp={defenderCurrentHp}
               onCurrentHpChange={setDefenderCurrentHp}
             />
@@ -2894,7 +3477,10 @@ export default function Home() {
         {/* ダメージ結果 */}
         {damageResult && finalMove ? (
           <div className="space-y-2">
-            <div className="px-4 py-2 font-bold text-white text-sm rounded-t-lg" style={{ backgroundColor: "#555" }}>
+            <div
+              className="px-4 py-2 text-sm font-bold rounded-t-lg"
+              style={{ backgroundColor: "#fdecec", color: "#d84c4c" }}
+            >
               計算結果 — {attacker.pokemon?.japaneseName} の {finalMove.japaneseName}
               {/* 体重依存技の威力表示 */}
               {(finalMove.name === "heavy-slam" || finalMove.name === "heat-crash") && attacker.pokemon?.weight && defender.pokemon?.weight && (
@@ -3082,7 +3668,7 @@ export default function Home() {
             <span key={t.value} className="inline-flex items-center">
               <button onClick={() => setTerrain(t.value)}
                 className={`text-[10px] px-1.5 py-0.5 rounded-full border transition-colors ${
-                  terrain === t.value ? "bg-green-500 text-white border-green-500" : "border-gray-200 text-gray-500 hover:border-green-300"
+                  terrain === t.value ? "bg-sky-500 text-white border-sky-500" : "border-gray-200 text-gray-500 hover:border-sky-300"
                 }`}>
                 {t.label}
               </button>
@@ -3095,6 +3681,7 @@ export default function Home() {
 
       <footer className="text-center py-6 px-4 space-y-2" style={{ color: "#888" }}>
         <p className="text-xs">ポケモンデータ: PokéAPI | 画像認識: Claude API (Anthropic)</p>
+        <p className="text-xs">このサイトはポケモン対戦向けの非公式ファンツールです。</p>
         <p className="text-xs leading-relaxed">
           当サイトは任天堂、株式会社ポケモン及び関係各社とは一切関係ありません。<br />
           ポケットモンスター・ポケモン・Pokémonは任天堂・クリーチャーズ・ゲームフリークの登録商標です。
@@ -3127,6 +3714,8 @@ interface PanelProps {
   critCount?: number;
   onCritCountChange?: (v: number) => void;
   onLoadFromBox?: (state: PokemonState, moves?: string[]) => void;
+  boxEntries?: BoxEntry[];
+  battleTeams?: BattleTeam[];
   registeredMoves?: string[];   // 登録済み技（登録ポケモンから呼び出した場合）
   weather?: WeatherCondition;
   onWeatherChange?: (v: WeatherCondition) => void;
@@ -3161,7 +3750,7 @@ function PokemonPanel({
   onIvChange, onEvChange, onStatRankChange,
   showMoveSelector, showFieldConditions, selectedMove, onMoveSelect,
   isCritical, onCriticalChange, hitCount, onHitCountChange, critCount, onCritCountChange,
-  onLoadFromBox, registeredMoves,
+  onLoadFromBox, boxEntries, battleTeams, registeredMoves,
   weather, onWeatherChange, terrain, onTerrainChange,
   currentHp, onCurrentHpChange, attackerWeight, defenderWeight,
   isPaybackDoubled: panelPaybackDoubled, onPaybackDoubledChange, secondAttack,
@@ -3183,16 +3772,32 @@ function PokemonPanel({
     } else {
       // 防御側
       if (!selectedMove) return ["hp", "defense"] as StatKey[]; // 技未選択時はHP+ぼうぎょ
+      if (MOVE_METADATA[selectedMove.name]?.defenseStatOverride === "defense") {
+        return ["hp", "defense"] as StatKey[];
+      }
       return selectedMove.category === "special"
         ? ["hp", "spDef"] as StatKey[]
         : ["hp", "defense"] as StatKey[];
     }
   })();
 
+  const panelTone = showMoveSelector
+    ? {
+        headerBackground: "#fdecec",
+        headerText: "#d84c4c",
+      }
+    : {
+        headerBackground: "#eaf3ff",
+        headerText: "#4c88d8",
+      };
+
   return (
     <div className="bg-white rounded-lg" style={{ border: "1px solid #e0e0e0", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}>
       {/* パネルヘッダー */}
-      <div className="px-4 py-2 font-bold text-white text-sm rounded-t-lg" style={{ backgroundColor: showMoveSelector ? "#e53935" : "#1e88e5" }}>
+      <div
+        className="px-4 py-2 text-sm font-bold rounded-t-lg"
+        style={{ backgroundColor: panelTone.headerBackground, color: panelTone.headerText }}
+      >
         {title}
       </div>
 
@@ -3203,6 +3808,8 @@ function PokemonPanel({
           pokemonName={pokemon?.japaneseName ?? ""}
           placeholder={showMoveSelector ? "クリックして攻撃するポケモンを選択" : "クリックして防御するポケモンを選択"}
           onBoxSelect={onLoadFromBox}
+          boxEntries={boxEntries}
+          teams={battleTeams}
         />
 
         {pokemon && (
