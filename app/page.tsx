@@ -2637,6 +2637,7 @@ function FieldConditionsPanel({
   onDefenderFlowerGiftChange,
   friendGuard,
   onFriendGuardChange,
+  canUseDisguise,
 }: {
   field: FieldConditions;
   onChange: (next: FieldConditions) => void;
@@ -2647,6 +2648,7 @@ function FieldConditionsPanel({
   onDefenderFlowerGiftChange: (next: boolean) => void;
   friendGuard: boolean;
   onFriendGuardChange: (next: boolean) => void;
+  canUseDisguise: boolean;
 }) {
   const toggle = (key: keyof Omit<FieldConditions, "spikesLayers">) => {
     onChange({ ...field, [key]: !field[key] });
@@ -2745,6 +2747,20 @@ function FieldConditionsPanel({
         </button>
         <Tooltip text={"交代時タイプ相性でHP削れる\n等倍→1/8・弱点2倍→1/4\n弱点4倍→1/2（耐性は1/16）"} side="bottom" />
       </div>
+
+      {canUseDisguise && (
+        <div className="flex items-center gap-2">
+          <button
+            className={`text-[11px] px-2.5 py-1 rounded-lg border font-medium transition-colors ${
+              field.disguiseBroken ? "bg-fuchsia-100 border-fuchsia-400 text-fuchsia-800" : "border-gray-200 text-gray-400 hover:border-gray-300"
+            }`}
+            onClick={() => toggle("disguiseBroken")}
+          >
+            {field.disguiseBroken ? "✓ " : ""}ばけのかわなし
+          </button>
+          <Tooltip text={"ミミッキュのばけのかわが剥がれた後の状態\nHPを最大値の1/8だけ減らして計算"} side="bottom" />
+        </div>
+      )}
 
       {/* まきびし */}
       <div className="flex items-center gap-2 flex-wrap">
@@ -3057,6 +3073,11 @@ export default function Home() {
     setDefender({ ...DEFAULT_STATE, pokemon: poke, ability: poke.abilities[0]?.slug ?? "" });
   }, []);
 
+  const defenderCanUseDisguise = useMemo(() => {
+    if (!defender.pokemon) return false;
+    return defender.pokemon.name === "mimikyu" || defender.ability === "disguise";
+  }, [defender.pokemon, defender.ability]);
+
   const handleSwap = useCallback(() => {
     setAttacker(defender);
     setDefender(attacker);
@@ -3316,14 +3337,17 @@ export default function Home() {
     const srDmg = f.stealthRock
       ? calcStealthRockHp(defenderStats.hp, defender.pokemon.types, defender.teraType, defender.isTerastallized)
       : null;
+    const disguiseDmg = defenderCanUseDisguise && f.disguiseBroken
+      ? Math.floor(defenderStats.hp / 8)
+      : null;
     const spDmg = f.spikesLayers > 0
       ? calcSpikesHp(defenderStats.hp, f.spikesLayers, defender.pokemon.types, defender.ability, defender.item, defender.teraType, defender.isTerastallized)
       : null;
-    if (srDmg == null && spDmg == null) return null;
+    if (srDmg == null && disguiseDmg == null && spDmg == null) return null;
     // spikesLayers > 0 だがダメージ0（ひこうタイプ等）の場合もspikesImmuneフラグを立てる
     const spikesImmune = f.spikesLayers > 0 && (spDmg === 0 || spDmg === null);
-    return { stealthRockHp: srDmg ?? undefined, spikesHp: spDmg ?? undefined, spikesImmune };
-  }, [defender, defenderStats]);
+    return { stealthRockHp: srDmg ?? undefined, disguiseHp: disguiseDmg ?? undefined, spikesHp: spDmg ?? undefined, spikesImmune };
+  }, [defender, defenderStats, defenderCanUseDisguise]);
 
   // 毒ダメージ計算
   const poisonDmg = useMemo(() => {
@@ -3673,6 +3697,7 @@ export default function Home() {
               onDefenderFlowerGiftChange={setDefenderFlowerGift}
               friendGuard={friendGuard}
               onFriendGuardChange={setFriendGuard}
+              canUseDisguise={defenderCanUseDisguise}
             />
             {damageResult && effectiveMove && <ReverseDamageSection
               rolls={damageResult.rolls} defenderHp={damageResult.defenderHp}
@@ -3748,6 +3773,7 @@ export default function Home() {
             <DamageResultPanel
               result={damageResult}
               stealthRockHp={hazardInfo?.stealthRockHp}
+              disguiseHp={hazardInfo?.disguiseHp}
               spikesHp={hazardInfo?.spikesHp}
               currentHp={defenderCurrentHp ?? undefined}
               hideReverseCalc
@@ -3782,6 +3808,9 @@ export default function Home() {
                 <DamageResultPanel
                   result={damageResult2}
                   currentHp={Math.max(1, damageResult.defenderHp - Math.floor((damageResult.minDamage + damageResult.maxDamage) / 2))}
+                  disguiseHp={hazardInfo?.disguiseHp}
+                  stealthRockHp={hazardInfo?.stealthRockHp}
+                  spikesHp={hazardInfo?.spikesHp}
                   hideReverseCalc
                   defenderItem={defender.item}
                 />
@@ -3798,7 +3827,7 @@ export default function Home() {
               {/* HP バー（設置技のみ） */}
               {(() => {
                 const hp = (defenderCurrentHp != null && defenderCurrentHp >= 1) ? defenderCurrentHp : defenderStats.hp;
-                const totalHazard = (hazardInfo.stealthRockHp ?? 0) + (hazardInfo.spikesHp ?? 0);
+                const totalHazard = (hazardInfo.stealthRockHp ?? 0) + (hazardInfo.disguiseHp ?? 0) + (hazardInfo.spikesHp ?? 0);
                 const hazardPct = Math.min((totalHazard / hp) * 100, 100);
                 const remainPct = Math.max(0, 100 - hazardPct);
                 return (
@@ -3834,12 +3863,20 @@ export default function Home() {
               })()}
               {/* 内訳 */}
               <div className="space-y-1">
-                <p className="text-xs font-semibold text-gray-600">設置技ダメージ（入場時）</p>
+                <p className="text-xs font-semibold text-gray-600">事前ダメージ</p>
                 {hazardInfo.stealthRockHp != null && hazardInfo.stealthRockHp > 0 && (
                   <div className="flex justify-between text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
                     <span className="text-amber-800 font-medium">ステルスロック</span>
                     <span className="font-bold text-amber-900">
                       -{hazardInfo.stealthRockHp} ({Math.round(hazardInfo.stealthRockHp / defenderStats.hp * 1000) / 10}% / 最大HP比)
+                    </span>
+                  </div>
+                )}
+                {hazardInfo.disguiseHp != null && hazardInfo.disguiseHp > 0 && (
+                  <div className="flex justify-between text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+                    <span className="text-amber-800 font-medium">ばけのかわなし</span>
+                    <span className="font-bold text-amber-900">
+                      -{hazardInfo.disguiseHp} ({Math.round(hazardInfo.disguiseHp / defenderStats.hp * 1000) / 10}% / 最大HP比)
                     </span>
                   </div>
                 )}
@@ -3859,7 +3896,7 @@ export default function Home() {
                 )}
               </div>
               {!selectedMove && (
-                <p className="text-xs text-gray-400 text-center">技を選択すると技ダメージ＋設置技の合算結果が表示されます</p>
+                <p className="text-xs text-gray-400 text-center">技を選択すると技ダメージ＋事前ダメージ込みの結果が表示されます</p>
               )}
             </div>
           </div>
@@ -4046,6 +4083,7 @@ interface PanelProps {
   onDefenderFlowerGiftChange?: (v: boolean) => void;
   friendGuard?: boolean;
   onFriendGuardChange?: (v: boolean) => void;
+  canUseDisguise?: boolean;
 }
 
 function PokemonPanel({
@@ -4059,7 +4097,7 @@ function PokemonPanel({
   isPaybackDoubled: panelPaybackDoubled, onPaybackDoubledChange, secondAttack,
   isDoubles, helpingHand, onHelpingHandChange, steelworker, onSteelworkerChange,
   powerSpot, onPowerSpotChange, flowerGift, onFlowerGiftChange, gravity, onGravityChange,
-  defenderFlowerGift, onDefenderFlowerGiftChange, friendGuard, onFriendGuardChange,
+  defenderFlowerGift, onDefenderFlowerGiftChange, friendGuard, onFriendGuardChange, canUseDisguise,
 }: PanelProps) {
   const { pokemon, level, nature, ivs, evs, teraType, isTerastallized, isDynamaxed, isMegaEvolved, megaForm, isBurned, isCharged, ability, item, fieldConditions } = state;
   const availableMegaForms = pokemon ? getMegaForms(pokemon.name) : [];
@@ -4389,6 +4427,7 @@ function PokemonPanel({
                 onDefenderFlowerGiftChange={onDefenderFlowerGiftChange ?? (() => {})}
                 friendGuard={friendGuard ?? false}
                 onFriendGuardChange={onFriendGuardChange ?? (() => {})}
+                canUseDisguise={canUseDisguise ?? false}
               />
             )}
           </>

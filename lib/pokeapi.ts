@@ -246,6 +246,14 @@ const FORM_JAPANESE_NAMES: Record<string, string> = {
   "miraidon":                  "ミライドン",
 };
 
+/**
+ * PokeAPI上では基本slugで取得できず、専用フォームslugが必要なポケモン。
+ * アプリ内部のslugはそのまま維持し、取得先だけ差し替える。
+ */
+const POKEMON_FETCH_SLUG_OVERRIDES: Record<string, string> = {
+  mimikyu: "mimikyu-disguised",
+};
+
 /** PokeAPIのタイプ名 → アプリ内タイプ名変換 */
 function toType(name: string): PokemonType {
   return name as PokemonType;
@@ -272,11 +280,12 @@ export async function fetchPokemon(nameOrId: string | number): Promise<PokemonDa
     const enSlug = getEnSlug(trimmed);
     slug = enSlug ?? trimmed.toLowerCase().replace(/\s+/g, "-");
   }
+  const fetchSlug = POKEMON_FETCH_SLUG_OVERRIDES[slug] ?? slug;
 
   // フォーム固有の日本語名オーバーライドをチェック
   const formNameOverride = FORM_JAPANESE_NAMES[slug];
 
-  const pokeRes = await fetch(`${BASE}/pokemon/${slug}`);
+  const pokeRes = await fetch(`${BASE}/pokemon/${fetchSlug}`);
   if (!pokeRes.ok) throw new Error(`ポケモン「${slug}」が見つかりません`);
   const poke = await pokeRes.json();
 
@@ -365,7 +374,7 @@ export async function fetchPokemon(nameOrId: string | number): Promise<PokemonDa
 
   return {
     id: poke.id,
-    name: poke.name,
+    name: slug,
     japaneseName,
     types: (poke.types as Array<{ slot: number; type: { name: string } }>)
       .sort((a, b) => a.slot - b.slot)

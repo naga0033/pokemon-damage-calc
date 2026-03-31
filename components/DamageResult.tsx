@@ -72,6 +72,7 @@ function formatModifierDetail(detail?: string): string | undefined {
 interface Props {
   result: DamageResult;
   stealthRockHp?: number;   // damage from stealth rock as HP amount
+  disguiseHp?: number;      // ばけのかわ消費ダメージ as HP amount
   spikesHp?: number;        // damage from spikes as HP amount
   currentHp?: number;       // 現在HP（残りHP）。未指定なら最大HP扱い
   hideReverseCalc?: boolean; // 逆算ツールを非表示にする
@@ -143,7 +144,7 @@ function getHazardKoLabel(rolls: number[], hp: number, hazardDmg: number): strin
   return "7発以上";
 }
 
-export default function DamageResultPanel({ result, stealthRockHp, spikesHp, currentHp, hideReverseCalc, poisonDmg = 0, defenderItem, hasLeftovers, defenderBaseDefense, defenderBaseHp, defenderLevel = 50, defenderNatureMod = 1, moveCategory, onApplyDefEv }: Props) {
+export default function DamageResultPanel({ result, stealthRockHp, disguiseHp, spikesHp, currentHp, hideReverseCalc, poisonDmg = 0, defenderItem, hasLeftovers, defenderBaseDefense, defenderBaseHp, defenderLevel = 50, defenderNatureMod = 1, moveCategory, onApplyDefEv }: Props) {
   const { minDamage: rawMinDamage, maxDamage: rawMaxDamage, koLabel, typeEffectiveness, defenderHp, rolls } = result;
   const activeModifiers = (result.modifiers ?? []).filter((modifier) => modifier.value !== 1);
   // たべのこし回復量（ON時のみ）
@@ -167,7 +168,7 @@ export default function DamageResultPanel({ result, stealthRockHp, spikesHp, cur
   const effInfo = EFF_LABEL[typeEffectiveness] ?? { label: `×${typeEffectiveness}`, color: "bg-gray-50 text-gray-600" };
 
   // 設置技合計ダメージ
-  const totalHazardDmg = (stealthRockHp ?? 0) + (spikesHp ?? 0);
+  const totalHazardDmg = (stealthRockHp ?? 0) + (disguiseHp ?? 0) + (spikesHp ?? 0);
   // 設置技込みKO: 現在HPからさらに設置ダメージを引いた残量で計算
   const hazardKoLabel = useMemo(
     () => (rolls.length > 0 && totalHazardDmg > 0 ? getHazardKoLabel(rolls, effectiveHp, totalHazardDmg) : null),
@@ -530,15 +531,23 @@ export default function DamageResultPanel({ result, stealthRockHp, spikesHp, cur
 
             </div>)}
 
-            {/* 設置技ダメージ */}
-            {(stealthRockHp != null || spikesHp != null) && (
+            {/* 事前ダメージ */}
+            {(stealthRockHp != null || disguiseHp != null || spikesHp != null) && (
               <div className="border-t pt-3 space-y-1">
-                <p className="text-xs font-semibold text-gray-600">設置技ダメージ（入場時）</p>
+                <p className="text-xs font-semibold text-gray-600">事前ダメージ</p>
                 {stealthRockHp != null && stealthRockHp > 0 && (
                   <div className="flex justify-between text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
                     <span className="text-amber-800 font-medium">ステルスロック</span>
                     <span className="font-bold text-amber-900">
                       -{stealthRockHp} ({Math.round(stealthRockHp / defenderHp * 1000) / 10}% / 最大HP比)
+                    </span>
+                  </div>
+                )}
+                {disguiseHp != null && disguiseHp > 0 && (
+                  <div className="flex justify-between text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+                    <span className="text-amber-800 font-medium">ばけのかわなし</span>
+                    <span className="font-bold text-amber-900">
+                      -{disguiseHp} ({Math.round(disguiseHp / defenderHp * 1000) / 10}% / 最大HP比)
                     </span>
                   </div>
                 )}

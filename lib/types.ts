@@ -72,6 +72,7 @@ export interface FieldConditions {
   reflect: boolean;        // リフレクター
   auroraVeil: boolean;     // オーロラベール
   stealthRock: boolean;    // ステルスロック
+  disguiseBroken: boolean; // ばけのかわが剥がれている
   spikesLayers: 0 | 1 | 2 | 3;  // まきびし層数
   substitute: boolean;     // みがわり
   leftovers: boolean;      // たべのこし（回復込み確定数）
@@ -84,6 +85,7 @@ export const DEFAULT_FIELD: FieldConditions = {
   reflect: false,
   auroraVeil: false,
   stealthRock: false,
+  disguiseBroken: false,
   spikesLayers: 0,
   substitute: false,
   leftovers: false,
