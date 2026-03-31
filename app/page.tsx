@@ -21,6 +21,7 @@ import MoveSelector from "@/components/MoveSelector";
 import DamageResultPanel, { inferBoosts, REVERSE_CANDIDATES } from "@/components/DamageResult";
 import TypeBadge from "@/components/TypeBadge";
 import { saveToBox, loadBox, deleteFromBox, updateBox, loadTeams, BattleTeam, BoxEntry, importBoxFromShareString, mergeImportedBox } from "@/lib/box-storage";
+import { loadHistory, saveHistory, type HistoryEntry } from "@/lib/history-storage";
 import { ABILITY_NAMES_JA, getAbilityJaName } from "@/lib/ability-names";
 import BoxManager from "@/components/BoxManager";
 import { useAuth } from "@/lib/auth-context";
@@ -3001,6 +3002,8 @@ export default function Home() {
   const [initialEditEntry, setInitialEditEntry] = useState<BoxEntry | null>(null);
   // 登録ポケモンから呼び出した場合の登録済み技（攻撃側のみ）
   const [attackerRegMoves, setAttackerRegMoves] = useState<string[]>([]);
+  // ポケモン検索履歴
+  const [pokemonHistory, setPokemonHistory] = useState<HistoryEntry[]>(() => loadHistory());
   // 防御側の現在HP（null = 最大HP = 100%）
   const [defenderCurrentHp, setDefenderCurrentHp] = useState<number | null>(null);
 
@@ -3042,7 +3045,23 @@ export default function Home() {
     setter((prev) => ({ ...prev, evs: { ...prev.evs, [key]: value } }));
   };
 
+  // ポケモン切替時に前のポケモンの状態を履歴に保存する
+  const saveCurrentToHistory = useCallback((state: PokemonState, moves?: string[]) => {
+    if (!state.pokemon) return;
+    const entry: HistoryEntry = {
+      pokemonName: state.pokemon.name,
+      state,
+      moves: moves?.filter(Boolean),
+      usedAt: Date.now(),
+    };
+    setPokemonHistory(saveHistory(entry));
+  }, []);
+
   const handleAttackerSelect = useCallback(async (poke: PokemonData) => {
+    // 前のポケモンの状態を履歴に保存（setter の外で実行）
+    if (attacker.pokemon && attacker.pokemon.name !== poke.name) {
+      saveCurrentToHistory(attacker, attackerRegMoves);
+    }
     setAttacker({ ...DEFAULT_STATE, pokemon: poke, ability: poke.abilities[0]?.slug ?? "" });
 
     // 自動技選択: 採用率1位のダメージ技を選ぶ（必ずそのポケモンが覚える技のみ）
@@ -3068,11 +3087,14 @@ export default function Home() {
     } else {
       handleMoveSelect(null);
     }
-  }, [handleMoveSelect]);
+  }, [handleMoveSelect, saveCurrentToHistory, attacker, attackerRegMoves]);
 
   const handleDefenderSelect = useCallback((poke: PokemonData) => {
+    if (defender.pokemon && defender.pokemon.name !== poke.name) {
+      saveCurrentToHistory(defender);
+    }
     setDefender({ ...DEFAULT_STATE, pokemon: poke, ability: poke.abilities[0]?.slug ?? "" });
-  }, []);
+  }, [saveCurrentToHistory, defender]);
 
   const defenderCanUseDisguise = useMemo(() => {
     if (!defender.pokemon) return false;
@@ -3585,7 +3607,8 @@ export default function Home() {
             onHitCountChange={setHitCount}
             critCount={critCount}
             onCritCountChange={setCritCount}
-            onLoadFromBox={(s, moves) => { setAttacker(s); handleMoveSelect(null); setAttackerRegMoves(moves ?? []); }}
+            onLoadFromBox={(s, moves) => { saveCurrentToHistory(attacker, attackerRegMoves); setAttacker({ ...DEFAULT_STATE, ...s, statRanks: { ...DEFAULT_STATE.statRanks, ...s.statRanks }, fieldConditions: { ...DEFAULT_FIELD, ...s.fieldConditions } }); handleMoveSelect(null); setAttackerRegMoves(moves ?? []); }}
+            pokemonHistory={pokemonHistory}
             boxEntries={boxEntries}
             battleTeams={battleTeams}
             registeredMoves={attackerRegMoves}
@@ -3690,7 +3713,8 @@ export default function Home() {
               showMoveSelector={false}
               showFieldConditions={true}
               selectedMove={effectiveMove}
-              onLoadFromBox={(s) => { setDefender(s); setDefenderCurrentHp(null); }}
+              onLoadFromBox={(s) => { saveCurrentToHistory(defender); setDefender({ ...DEFAULT_STATE, ...s, statRanks: { ...DEFAULT_STATE.statRanks, ...s.statRanks }, fieldConditions: { ...DEFAULT_FIELD, ...s.fieldConditions } }); setDefenderCurrentHp(null); }}
+              pokemonHistory={pokemonHistory}
               boxEntries={boxEntries}
               battleTeams={battleTeams}
               currentHp={defenderCurrentHp}
@@ -4091,6 +4115,7 @@ interface PanelProps {
   canUseDisguise?: boolean;
   supremeOverlordFaintedAllies?: number;
   onSupremeOverlordFaintedAlliesChange?: (v: number) => void;
+  pokemonHistory?: HistoryEntry[];
 }
 
 function PokemonPanel({
@@ -4106,6 +4131,7 @@ function PokemonPanel({
   powerSpot, onPowerSpotChange, flowerGift, onFlowerGiftChange, gravity, onGravityChange,
   defenderFlowerGift, onDefenderFlowerGiftChange, friendGuard, onFriendGuardChange, canUseDisguise,
   supremeOverlordFaintedAllies, onSupremeOverlordFaintedAlliesChange,
+  pokemonHistory,
 }: PanelProps) {
   const { pokemon, level, nature, ivs, evs, teraType, isTerastallized, isDynamaxed, isMegaEvolved, megaForm, isBurned, isCharged, ability, item, fieldConditions } = state;
   const availableMegaForms = pokemon ? getMegaForms(pokemon.name) : [];
@@ -4162,6 +4188,7 @@ function PokemonPanel({
           onBoxSelect={onLoadFromBox}
           boxEntries={boxEntries}
           teams={battleTeams}
+          pokemonHistory={pokemonHistory}
         />
 
         {pokemon && (

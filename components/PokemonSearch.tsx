@@ -6,6 +6,7 @@ import { searchByJaName, getEnSlug, EN_TO_JA } from "@/lib/pokemon-names";
 import { USAGE_RANKING } from "@/lib/usage-ranking";
 import { POKEMON_IDS } from "@/lib/pokemon-ids";
 import { loadBox, loadTeams, BoxEntry, BattleTeam } from "@/lib/box-storage";
+import type { HistoryEntry } from "@/lib/history-storage";
 import { NATURE_DATA, calcAllStats } from "@/lib/stats";
 import { KanaKeyboard } from "@/components/KanaKeyboard";
 import { MOVE_NAMES_JA } from "@/lib/move-names";
@@ -21,6 +22,7 @@ interface Props {
   onBoxSelect?: (state: PokemonState, moves?: string[]) => void;
   boxEntries?: BoxEntry[];
   teams?: BattleTeam[];
+  pokemonHistory?: HistoryEntry[];
 }
 
 interface SearchResult {
@@ -30,7 +32,7 @@ interface SearchResult {
   boxEntry?: BoxEntry;
 }
 
-export default function PokemonSearch({ onSelect, label, pokemonName, placeholder, onBoxSelect, boxEntries: boxEntriesProp, teams: teamsProp }: Props) {
+export default function PokemonSearch({ onSelect, label, pokemonName, placeholder, onBoxSelect, boxEntries: boxEntriesProp, teams: teamsProp, pokemonHistory }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -168,6 +170,22 @@ export default function PokemonSearch({ onSelect, label, pokemonName, placeholde
     const jaName = entry.state.pokemon?.japaneseName || "";
     setQuery(jaName);
     if (onBoxSelect) {
+      onBoxSelect(entry.state, entry.moves);
+    } else if (entry.state.pokemon) {
+      onSelect(entry.state.pokemon);
+    }
+    (document.activeElement as HTMLElement)?.blur();
+  }, [onBoxSelect, onSelect]);
+
+  // 履歴からポケモンを選択（状態を復元）
+  const handleHistorySelect = useCallback((entry: HistoryEntry) => {
+    setOpen(false);
+    setShowRanking(false);
+    setShowKanaKb(false);
+    const jaName = entry.state.pokemon?.japaneseName || "";
+    setQuery(jaName);
+    if (onBoxSelect) {
+      // onBoxSelect があれば PokemonState ごと復元（努力値・性格・特性・道具など全部）
       onBoxSelect(entry.state, entry.moves);
     } else if (entry.state.pokemon) {
       onSelect(entry.state.pokemon);
@@ -458,10 +476,45 @@ export default function PokemonSearch({ onSelect, label, pokemonName, placeholde
           ref={dropdownRef}
           className="absolute z-[250] left-0 w-full min-w-[280px] bg-white border border-gray-200 rounded-lg shadow-xl mt-1 max-h-[65vh] overflow-y-auto"
         >
+          {/* 最近使ったポケモン（ランキング表示時のみ・履歴があるときのみ） */}
+          {showRanking && pokemonHistory && pokemonHistory.length > 0 && (
+            <>
+              <div className="px-3 py-1.5 text-xs text-gray-500 bg-amber-50 border-b border-amber-100 font-semibold sticky top-0 z-10">
+                最近使ったポケモン
+              </div>
+              <div className="flex flex-wrap gap-1 px-3 py-2 border-b border-gray-200 bg-amber-50/30">
+                {pokemonHistory.slice(0, 10).map((h) => {
+                  const poke = h.state.pokemon;
+                  if (!poke) return null;
+                  const pid = POKEMON_IDS[poke.name] ?? poke.id;
+                  return (
+                    <button
+                      key={h.pokemonName}
+                      onMouseDown={() => handleHistorySelect(h)}
+                      className="flex flex-col items-center hover:bg-amber-100 rounded-lg p-1 transition-colors"
+                      title={`${poke.japaneseName}（前回の設定を復元）`}
+                    >
+                      {pid ? (
+                        <img
+                          src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${pid}.png`}
+                          alt=""
+                          className="w-8 h-8 object-contain"
+                          loading="lazy"
+                          onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
+                        />
+                      ) : <div className="w-8 h-8" />}
+                      <span className="text-[9px] font-bold text-gray-600 truncate max-w-[56px]">{poke.japaneseName}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
+
           {/* ランキングヘッダー */}
           {showRanking && (
             <div className="px-3 py-1.5 text-xs text-gray-500 bg-gray-50 border-b border-gray-100 font-semibold sticky top-0">
-              🏆 使用率ランキング → アイウエオ順 全ポケモン
+              使用率ランキング → アイウエオ順 全ポケモン
             </div>
           )}
 
