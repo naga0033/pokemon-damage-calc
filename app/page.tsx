@@ -2244,6 +2244,7 @@ function CurrentHpEditor({
   const [hpNumpadStr, setHpNumpadStr] = useState("");
   const [hpNumpadPos, setHpNumpadPos] = useState<{ top: number; left: number } | null>(null);
   const hpInputRef = useRef<HTMLDivElement>(null);
+  const hpKeyboardRef = useRef<HTMLInputElement>(null);
 
   const openHpNumpad = (e: React.MouseEvent<HTMLInputElement>) => {
     e.preventDefault();
@@ -2252,6 +2253,7 @@ function CurrentHpEditor({
     setHpNumpadPos({ top: rect.bottom + 6, left: rect.left + rect.width / 2 });
     setHpNumpadStr("");
     setHpNumpadOpen(true);
+    requestAnimationFrame(() => hpKeyboardRef.current?.focus());
   };
 
   const handleHpDigit = (d: string) => {
@@ -2280,6 +2282,7 @@ function CurrentHpEditor({
   const [pctNumpadStr, setPctNumpadStr] = useState("");
   const [pctNumpadPos, setPctNumpadPos] = useState<{ top: number; left: number } | null>(null);
   const pctInputRef = useRef<HTMLDivElement>(null);
+  const pctKeyboardRef = useRef<HTMLInputElement>(null);
 
   const openPctNumpad = (e: React.MouseEvent<HTMLInputElement>) => {
     e.preventDefault();
@@ -2288,6 +2291,7 @@ function CurrentHpEditor({
     setPctNumpadPos({ top: rect.bottom + 6, left: rect.left + rect.width / 2 });
     setPctNumpadStr("");
     setPctNumpadOpen(true);
+    requestAnimationFrame(() => pctKeyboardRef.current?.focus());
   };
 
   const handlePctDigit = (d: string) => {
@@ -2367,9 +2371,45 @@ function CurrentHpEditor({
             inputMode="numeric"
             pattern="[0-9]*"
             value={hpStr}
+            ref={hpKeyboardRef}
             readOnly
             onClick={openHpNumpad}
             onFocus={(e) => { e.target.select(); }}
+            onKeyDown={(e) => {
+              if (/^[0-9]$/.test(e.key)) {
+                e.preventDefault();
+                if (!hpNumpadOpen) {
+                  closePctNumpad();
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setHpNumpadPos({ top: rect.bottom + 6, left: rect.left + rect.width / 2 });
+                  setHpNumpadOpen(true);
+                  setHpNumpadStr("");
+                }
+                handleHpDigit(e.key);
+                return;
+              }
+              if (e.key === "Backspace") {
+                e.preventDefault();
+                setHpNumpadStr((prev) => {
+                  const next = prev.slice(0, -1);
+                  if (!next) {
+                    setHpStr("");
+                    return "";
+                  }
+                  const n = parseInt(next, 10);
+                  if (!isNaN(n)) {
+                    setHpStr(next);
+                    commitHp(Math.min(n, maxHp));
+                  }
+                  return next;
+                });
+                return;
+              }
+              if (e.key === "Escape" || e.key === "Enter") {
+                e.preventDefault();
+                closeHpNumpad();
+              }
+            }}
             className="hidden md:block w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm text-center font-mono focus:outline-none focus:ring-2 focus:ring-red-400 cursor-pointer"
           />
           <p className="text-[10px] text-gray-400 text-center mt-0.5">実数値 / 最大 {maxHp}</p>
@@ -2425,15 +2465,53 @@ function CurrentHpEditor({
               }}
               onFocus={() => setPctStr("")}
             />
-            <input
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={pctStr}
-              readOnly
-              onClick={openPctNumpad}
-              className="hidden md:block w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-center font-mono focus:outline-none focus:ring-2 focus:ring-red-400 cursor-pointer"
-            />
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            value={pctStr}
+            ref={pctKeyboardRef}
+            readOnly
+            onClick={openPctNumpad}
+            onFocus={(e) => { e.target.select(); }}
+            onKeyDown={(e) => {
+              if (/^[0-9]$/.test(e.key)) {
+                e.preventDefault();
+                if (!pctNumpadOpen) {
+                  closeHpNumpad();
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setPctNumpadPos({ top: rect.bottom + 6, left: rect.left + rect.width / 2 });
+                  setPctNumpadOpen(true);
+                  setPctNumpadStr("");
+                }
+                handlePctDigit(e.key);
+                return;
+              }
+              if (e.key === "Backspace") {
+                e.preventDefault();
+                setPctNumpadStr((prev) => {
+                  const next = prev.slice(0, -1);
+                  if (!next) {
+                    setPctStr("");
+                    return "";
+                  }
+                  const n = parseInt(next, 10);
+                  if (!isNaN(n) && n > 0 && n <= 100) {
+                    const pStr = String(n);
+                    setPctStr(pStr);
+                    commitPct(pStr);
+                  }
+                  return next;
+                });
+                return;
+              }
+              if (e.key === "Escape" || e.key === "Enter") {
+                e.preventDefault();
+                closePctNumpad();
+              }
+            }}
+            className="hidden md:block w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm text-center font-mono focus:outline-none focus:ring-2 focus:ring-red-400 cursor-pointer"
+          />
             <span className="text-sm text-gray-500 flex-shrink-0 font-medium">%</span>
           </div>
           <p className="text-[10px] text-gray-400 text-center mt-0.5">割合</p>
@@ -2496,6 +2574,11 @@ function ReverseDamageSection({ rolls, defenderHp, minDamage, maxDamage, defende
   const [input, setInput] = useState("");
   const [calcOpen, setCalcOpen] = useState(false);
   const [calcExpr, setCalcExpr] = useState("");
+  const [damageNumpadOpen, setDamageNumpadOpen] = useState(false);
+  const [damageNumpadStr, setDamageNumpadStr] = useState("");
+  const [damageNumpadPos, setDamageNumpadPos] = useState<{ top: number; left: number } | null>(null);
+  const damageInputRef = useRef<HTMLDivElement>(null);
+  const damageKeyboardRef = useRef<HTMLInputElement>(null);
   const num = parseInt(input, 10);
   const boosts = useMemo(() => (Number.isFinite(num) && num > 0 ? inferBoosts(num, rolls) : []), [num, rolls]);
   const pct = Number.isFinite(num) && num > 0 ? `${Math.round((num / defenderHp) * 1000) / 10}%` : null;
@@ -2509,6 +2592,41 @@ function ReverseDamageSection({ rolls, defenderHp, minDamage, maxDamage, defende
     else if (v.length > 4) v = v.slice(0, 4);
     setInput(v);
   };
+
+  const closeDamageNumpad = useCallback(() => {
+    setDamageNumpadOpen(false);
+    setDamageNumpadPos(null);
+  }, []);
+
+  const openDamageNumpad = (e: React.MouseEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setDamageNumpadPos({ top: rect.bottom + 6, left: rect.left + rect.width / 2 });
+    setDamageNumpadStr("");
+    setDamageNumpadOpen(true);
+    requestAnimationFrame(() => damageKeyboardRef.current?.focus());
+  };
+
+  const handleDamageDigit = useCallback((d: string) => {
+    setDamageNumpadStr((prev) => {
+      const next = prev === "0" ? d : prev + d;
+      if (next.length > 4) return prev;
+      const n = parseInt(next, 10);
+      if (!isNaN(n)) setInput(String(n));
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!damageNumpadOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (damageInputRef.current && !damageInputRef.current.contains(e.target as Node)) {
+        closeDamageNumpad();
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [damageNumpadOpen, closeDamageNumpad]);
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 space-y-2">
@@ -2560,17 +2678,72 @@ function ReverseDamageSection({ rolls, defenderHp, minDamage, maxDamage, defende
         </div>
       )}
       <div className="flex items-center gap-2">
-        <div className="relative flex-1">
+        <div className="relative flex-1" ref={damageInputRef}>
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            autoComplete="off"
+            className="md:hidden w-full border rounded-lg px-2 py-1 text-sm transition-colors focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-200 border-gray-300 hover:border-purple-300 text-gray-700"
+            value={input}
+            onChange={(e) => onDamageInputChange(e.target.value)}
+            placeholder="ダメージ数値"
+            onFocus={() => setInput("")}
+          />
           <input
             type="text"
             inputMode="numeric"
             pattern="[0-9]*"
             autoComplete="off"
             value={input}
-            onChange={(e) => onDamageInputChange(e.target.value)}
+            ref={damageKeyboardRef}
+            readOnly
+            onClick={openDamageNumpad}
+            onFocus={(e) => { e.target.select(); }}
+            onKeyDown={(e) => {
+              if (/^[0-9]$/.test(e.key)) {
+                e.preventDefault();
+                if (!damageNumpadOpen) {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setDamageNumpadPos({ top: rect.bottom + 6, left: rect.left + rect.width / 2 });
+                  setDamageNumpadOpen(true);
+                  setDamageNumpadStr("");
+                }
+                handleDamageDigit(e.key);
+                return;
+              }
+              if (e.key === "Backspace") {
+                e.preventDefault();
+                setDamageNumpadStr((prev) => {
+                  const next = prev.slice(0, -1);
+                  setInput(next);
+                  return next;
+                });
+                return;
+              }
+              if (e.key === "Escape" || e.key === "Enter") {
+                e.preventDefault();
+                closeDamageNumpad();
+              }
+            }}
             placeholder="ダメージ数値"
-            className="w-full border rounded-lg px-2 py-1 text-sm transition-colors focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-200 border-gray-300 hover:border-purple-300 text-gray-700"
+            className="hidden md:block w-full border rounded-lg px-2 py-1 text-sm transition-colors focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-200 border-gray-300 hover:border-purple-300 text-gray-700 cursor-pointer"
           />
+          {damageNumpadOpen && (
+            <div className="hidden md:block">
+              <NumpadPopup
+                value={damageNumpadStr}
+                maxLabel="9999"
+                minLabel="1"
+                onDigit={handleDamageDigit}
+                onClear={() => { setDamageNumpadStr(""); setInput(""); }}
+                onMax={() => { setDamageNumpadStr("9999"); setInput("9999"); }}
+                onMin={() => { setDamageNumpadStr("1"); setInput("1"); }}
+                pos={damageNumpadPos ?? undefined}
+                onClose={closeDamageNumpad}
+              />
+            </div>
+          )}
         </div>
         {pct && <span className="text-xs font-medium text-gray-500 whitespace-nowrap">= {pct}</span>}
       </div>
