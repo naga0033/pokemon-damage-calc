@@ -314,7 +314,7 @@ export const MEGA_FORMS: MegaForm[] = [
     ability: "magic-bounce", abilityJa: "マジックミラー", megaStone: "absolite-z", megaStoneJa: "アブソルナイトZ", spriteUrl: ART(10307) },
   { slug: "garchomp-mega-z", baseSlug: "garchomp", jaName: "メガガブリアスZ",
     types: ["dragon"], baseStats: { hp: 108, attack: 130, defense: 85, spAtk: 141, spDef: 85, speed: 151 },
-    ability: "sand-force", abilityJa: "すなのちから", megaStone: "garchompite-z", megaStoneJa: "ガブリアスナイトZ", spriteUrl: ART(10309) },
+    ability: "sand-force", abilityJa: "すなのちから", megaStone: "garchompite-z", megaStoneJa: "ガブリアスナイトZ", spriteUrl: SHOWDOWN("garchomp-mega") },
   { slug: "lucario-mega-z", baseSlug: "lucario", jaName: "メガルカリオZ",
     types: ["fighting", "steel"], baseStats: { hp: 70, attack: 100, defense: 70, spAtk: 164, spDef: 70, speed: 151 },
     ability: "adaptability", abilityJa: "てきおうりょく", megaStone: "lucarionite-z", megaStoneJa: "ルカリオナイトZ", spriteUrl: ART(10310) },
