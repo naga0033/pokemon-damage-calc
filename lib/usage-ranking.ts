@@ -1,11 +1,44 @@
+import { supabase } from "./supabase";
+
 /**
- * ポケモンSV 使用率ランキング (シングルバトル・シリーズ40 pokedb.tokyo 参考)
- * ディンルー / パオジアン / コライドン から始まる現環境トップ順
+ * ポケモンSV 使用率ランキング
+ * Supabase からクラウド版を取得し、取れなければハードコード版にフォールバック
  */
 export interface UsageEntry {
   name: string;   // PokeAPI slug
   ja: string;     // 日本語名
   id: number;     // PokeAPI ID (スプライト用)
+}
+
+/** Supabase から最新ランキングを取得（キャッシュ付き） */
+let cloudCache: { singles: UsageEntry[]; doubles: UsageEntry[]; fetchedAt: number } | null = null;
+const CACHE_TTL = 60 * 60 * 1000; // 1時間
+
+export async function fetchCloudRanking(): Promise<{ singles: UsageEntry[]; doubles: UsageEntry[] } | null> {
+  // キャッシュが有効ならそれを返す
+  if (cloudCache && Date.now() - cloudCache.fetchedAt < CACHE_TTL) {
+    return cloudCache;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("usage_ranking")
+      .select("singles, doubles")
+      .eq("id", "latest")
+      .maybeSingle();
+
+    if (error || !data) return null;
+
+    const singles = Array.isArray(data.singles) ? data.singles as UsageEntry[] : [];
+    const doubles = Array.isArray(data.doubles) ? data.doubles as UsageEntry[] : [];
+
+    if (singles.length === 0 && doubles.length === 0) return null;
+
+    cloudCache = { singles, doubles, fetchedAt: Date.now() };
+    return cloudCache;
+  } catch {
+    return null;
+  }
 }
 
 export const USAGE_RANKING: UsageEntry[] = [

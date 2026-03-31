@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { fetchPokemon } from "@/lib/pokeapi";
 import type { PokemonData, PokemonState } from "@/lib/types";
 import { searchByJaName, getEnSlug, EN_TO_JA } from "@/lib/pokemon-names";
-import { USAGE_RANKING, USAGE_RANKING_DOUBLES } from "@/lib/usage-ranking";
+import { USAGE_RANKING, USAGE_RANKING_DOUBLES, fetchCloudRanking, type UsageEntry } from "@/lib/usage-ranking";
 import { POKEMON_IDS } from "@/lib/pokemon-ids";
 import { loadBox, loadTeams, BoxEntry, BattleTeam } from "@/lib/box-storage";
 import type { HistoryEntry } from "@/lib/history-storage";
@@ -43,6 +43,22 @@ export default function PokemonSearch({ onSelect, label, pokemonName, placeholde
   const [teams, setTeams] = useState<BattleTeam[]>([]);
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const [showKanaKb, setShowKanaKb] = useState(false);
+
+  // クラウドランキング（Supabase から取得）
+  const [cloudSingles, setCloudSingles] = useState<UsageEntry[] | null>(null);
+  const [cloudDoubles, setCloudDoubles] = useState<UsageEntry[] | null>(null);
+  const cloudFetched = useRef(false);
+
+  useEffect(() => {
+    if (cloudFetched.current) return;
+    cloudFetched.current = true;
+    fetchCloudRanking().then((data) => {
+      if (data) {
+        if (data.singles.length > 0) setCloudSingles(data.singles);
+        if (data.doubles.length > 0) setCloudDoubles(data.doubles);
+      }
+    });
+  }, []);
 
   // 登録ポケモン専用パネル
   const [boxPanelOpen, setBoxPanelOpen] = useState(false);
@@ -203,7 +219,10 @@ export default function PokemonSearch({ onSelect, label, pokemonName, placeholde
     setShowRanking(false);
   }, [boxEntriesProp, teamsProp]);
 
-  const activeRanking = isDoubles ? USAGE_RANKING_DOUBLES : USAGE_RANKING;
+  // クラウドランキングがあればそちらを優先、なければハードコード版にフォールバック
+  const activeRanking = isDoubles
+    ? (cloudDoubles ?? USAGE_RANKING_DOUBLES)
+    : (cloudSingles ?? USAGE_RANKING);
   const rankingList: SearchResult[] = activeRanking.map((r) => ({ name: r.name, ja: r.ja, id: r.id }));
   const rankingNames = new Set(activeRanking.map((r) => r.name));
   const remainingSorted: SearchResult[] = Object.entries(EN_TO_JA)
