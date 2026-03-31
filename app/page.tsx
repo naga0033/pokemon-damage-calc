@@ -4164,6 +4164,7 @@ function PokemonPanel({
           boxEntries={boxEntries}
           teams={battleTeams}
           pokemonHistory={pokemonHistory}
+          isDoubles={isDoubles}
         />
 
         {pokemon && (

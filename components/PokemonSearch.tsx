@@ -3,7 +3,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { fetchPokemon } from "@/lib/pokeapi";
 import type { PokemonData, PokemonState } from "@/lib/types";
 import { searchByJaName, getEnSlug, EN_TO_JA } from "@/lib/pokemon-names";
-import { USAGE_RANKING } from "@/lib/usage-ranking";
+import { USAGE_RANKING, USAGE_RANKING_DOUBLES } from "@/lib/usage-ranking";
 import { POKEMON_IDS } from "@/lib/pokemon-ids";
 import { loadBox, loadTeams, BoxEntry, BattleTeam } from "@/lib/box-storage";
 import type { HistoryEntry } from "@/lib/history-storage";
@@ -23,6 +23,7 @@ interface Props {
   boxEntries?: BoxEntry[];
   teams?: BattleTeam[];
   pokemonHistory?: HistoryEntry[];
+  isDoubles?: boolean;
 }
 
 interface SearchResult {
@@ -32,7 +33,7 @@ interface SearchResult {
   boxEntry?: BoxEntry;
 }
 
-export default function PokemonSearch({ onSelect, label, pokemonName, placeholder, onBoxSelect, boxEntries: boxEntriesProp, teams: teamsProp, pokemonHistory }: Props) {
+export default function PokemonSearch({ onSelect, label, pokemonName, placeholder, onBoxSelect, boxEntries: boxEntriesProp, teams: teamsProp, pokemonHistory, isDoubles }: Props) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
@@ -202,8 +203,9 @@ export default function PokemonSearch({ onSelect, label, pokemonName, placeholde
     setShowRanking(false);
   }, [boxEntriesProp, teamsProp]);
 
-  const rankingList: SearchResult[] = USAGE_RANKING.map((r) => ({ name: r.name, ja: r.ja, id: r.id }));
-  const rankingNames = new Set(USAGE_RANKING.map((r) => r.name));
+  const activeRanking = isDoubles ? USAGE_RANKING_DOUBLES : USAGE_RANKING;
+  const rankingList: SearchResult[] = activeRanking.map((r) => ({ name: r.name, ja: r.ja, id: r.id }));
+  const rankingNames = new Set(activeRanking.map((r) => r.name));
   const remainingSorted: SearchResult[] = Object.entries(EN_TO_JA)
     .filter(([en]) => !rankingNames.has(en))
     .sort(([, jaA], [, jaB]) => jaA.localeCompare(jaB, "ja"))
@@ -514,7 +516,7 @@ export default function PokemonSearch({ onSelect, label, pokemonName, placeholde
           {/* ランキングヘッダー */}
           {showRanking && (
             <div className="px-3 py-1.5 text-xs text-gray-500 bg-gray-50 border-b border-gray-100 font-semibold sticky top-0">
-              使用率ランキング → アイウエオ順 全ポケモン
+              {isDoubles ? "ダブル" : "シングル"}使用率ランキング → アイウエオ順
             </div>
           )}
 
