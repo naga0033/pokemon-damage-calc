@@ -2956,6 +2956,8 @@ export default function Home() {
     return loadBox();
   });
   const [battleTeams, setBattleTeams] = useState<BattleTeam[]>(() => loadTeams());
+  // ポケモン検索履歴
+  const [pokemonHistory, setPokemonHistory] = useState<HistoryEntry[]>(() => loadHistory());
 
   // Supabase同期: ログイン時にクラウドからデータを読み込み＆リアルタイム同期
   const syncInProgress = useRef(false);
@@ -2966,6 +2968,10 @@ export default function Home() {
     migrateLocalToCloud(user.id).then((merged) => {
       setBoxEntries(merged.entries);
       setBattleTeams(merged.teams);
+      if (merged.history) {
+        setPokemonHistory(merged.history);
+        localStorage.setItem("pokemon-dmg-history-v1", JSON.stringify(merged.history));
+      }
       localStorage.setItem("pokemon-dmg-box-v1", JSON.stringify(merged.entries));
       localStorage.setItem("pokemon-dmg-teams-v1", JSON.stringify(merged.teams));
       syncInProgress.current = false;
@@ -2975,21 +2981,25 @@ export default function Home() {
     const unsubscribe = subscribeToCloudChanges(user.id, (cloudData) => {
       setBoxEntries(cloudData.entries);
       setBattleTeams(cloudData.teams);
+      if (cloudData.history) {
+        setPokemonHistory(cloudData.history);
+        localStorage.setItem("pokemon-dmg-history-v1", JSON.stringify(cloudData.history));
+      }
       localStorage.setItem("pokemon-dmg-box-v1", JSON.stringify(cloudData.entries));
       localStorage.setItem("pokemon-dmg-teams-v1", JSON.stringify(cloudData.teams));
     });
     return unsubscribe;
   }, [user]);
 
-  // ボックス・バトルチーム変更時にクラウドにも保存
+  // ボックス・バトルチーム・履歴の変更時にクラウドにも保存
   const prevSyncRef = useRef<string>("");
   useEffect(() => {
     if (!user || syncInProgress.current) return;
-    const json = JSON.stringify({ entries: boxEntries, teams: battleTeams });
+    const json = JSON.stringify({ entries: boxEntries, teams: battleTeams, history: pokemonHistory });
     if (json === prevSyncRef.current) return; // 同じデータはスキップ
     prevSyncRef.current = json;
-    saveCloudDataToCloud(user.id, { entries: boxEntries, teams: battleTeams });
-  }, [boxEntries, battleTeams, user]);
+    saveCloudDataToCloud(user.id, { entries: boxEntries, teams: battleTeams, history: pokemonHistory });
+  }, [boxEntries, battleTeams, pokemonHistory, user]);
 
   useEffect(() => {
     localStorage.setItem("pokemon-dmg-box-v1", JSON.stringify(boxEntries));
@@ -3002,8 +3012,6 @@ export default function Home() {
   const [initialEditEntry, setInitialEditEntry] = useState<BoxEntry | null>(null);
   // 登録ポケモンから呼び出した場合の登録済み技（攻撃側のみ）
   const [attackerRegMoves, setAttackerRegMoves] = useState<string[]>([]);
-  // ポケモン検索履歴
-  const [pokemonHistory, setPokemonHistory] = useState<HistoryEntry[]>(() => loadHistory());
   // 防御側の現在HP（null = 最大HP = 100%）
   const [defenderCurrentHp, setDefenderCurrentHp] = useState<number | null>(null);
 
@@ -3551,35 +3559,18 @@ export default function Home() {
             ⇄ 攻守入れ替え
           </button>
           <div
-            className="inline-flex lg:hidden items-center rounded-md overflow-hidden bg-white"
+            className="inline-flex items-center rounded-md overflow-hidden bg-white"
             style={{ border: "1px solid #e0e0e0", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}
           >
             <button
               onClick={() => setIsDoubles(false)}
-              className={`px-3 py-1.5 text-xs font-semibold transition-colors ${!isDoubles ? "bg-sky-500 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
+              className={`px-3 lg:px-4 py-1.5 text-xs font-semibold transition-colors ${!isDoubles ? "bg-sky-500 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
             >
               シングル
             </button>
             <button
               onClick={() => setIsDoubles(true)}
-              className={`px-3 py-1.5 text-xs font-semibold transition-colors ${isDoubles ? "bg-sky-500 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
-            >
-              ダブル
-            </button>
-          </div>
-          <div
-            className="hidden lg:inline-flex items-center rounded-md overflow-hidden bg-white"
-            style={{ border: "1px solid #e0e0e0", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}
-          >
-            <button
-              onClick={() => setIsDoubles(false)}
-              className={`px-4 py-1.5 text-xs font-semibold transition-colors ${!isDoubles ? "bg-sky-500 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
-            >
-              シングル
-            </button>
-            <button
-              onClick={() => setIsDoubles(true)}
-              className={`px-4 py-1.5 text-xs font-semibold transition-colors ${isDoubles ? "bg-sky-500 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
+              className={`px-3 lg:px-4 py-1.5 text-xs font-semibold transition-colors ${isDoubles ? "bg-sky-500 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
             >
               ダブル
             </button>
@@ -3681,22 +3672,6 @@ export default function Home() {
                 </button>
               </span>
             ))}
-            <span className="basis-full h-0" />
-            <span className="hidden lg:inline text-[10px] font-semibold text-gray-400">対戦形式</span>
-            <div className="hidden lg:inline-flex rounded-full border border-gray-200 overflow-hidden">
-              <button
-                onClick={() => setIsDoubles(false)}
-                className={`text-[10px] px-2 py-0.5 ${!isDoubles ? "bg-sky-500 text-white" : "bg-white text-gray-500"}`}
-              >
-                シングル
-              </button>
-              <button
-                onClick={() => setIsDoubles(true)}
-                className={`text-[10px] px-2 py-0.5 ${isDoubles ? "bg-sky-500 text-white" : "bg-white text-gray-500"}`}
-              >
-                ダブル
-              </button>
-            </div>
           </div>
 
           {/* 防御側 + 逆算ツール */}

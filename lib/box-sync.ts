@@ -1,21 +1,25 @@
 import { supabase } from "./supabase";
 import type { BattleTeam, BoxEntry } from "./box-storage";
 import { loadBox, loadTeams } from "./box-storage";
+import type { HistoryEntry } from "./history-storage";
+import { loadHistory } from "./history-storage";
 
 export interface CloudSyncData {
   entries: BoxEntry[];
   teams: BattleTeam[];
+  history?: HistoryEntry[];
 }
 
 function normalizeCloudData(data: unknown): CloudSyncData {
   if (Array.isArray(data)) {
-    return { entries: data as BoxEntry[], teams: [] };
+    return { entries: data as BoxEntry[], teams: [], history: [] };
   }
 
-  const payload = data as { entries?: BoxEntry[]; teams?: BattleTeam[] } | null;
+  const payload = data as { entries?: BoxEntry[]; teams?: BattleTeam[]; history?: HistoryEntry[] } | null;
   return {
     entries: Array.isArray(payload?.entries) ? payload.entries : [],
     teams: Array.isArray(payload?.teams) ? payload.teams : [],
+    history: Array.isArray(payload?.history) ? payload.history : [],
   };
 }
 
@@ -91,10 +95,23 @@ export async function saveCloudDataToCloud(userId: string, syncData: CloudSyncDa
   return true;
 }
 
+/** 履歴のマージ: pokemonName をキーにして新しい方を優先、最大20件 */
+function mergeHistory(a: HistoryEntry[], b: HistoryEntry[]): HistoryEntry[] {
+  const map = new Map<string, HistoryEntry>();
+  for (const entry of [...a, ...b]) {
+    const current = map.get(entry.pokemonName);
+    if (!current || entry.usedAt >= current.usedAt) {
+      map.set(entry.pokemonName, entry);
+    }
+  }
+  return [...map.values()].sort((x, y) => y.usedAt - x.usedAt).slice(0, 20);
+}
+
 function mergeLocalAndCloud(cloudData: CloudSyncData, localData: CloudSyncData): CloudSyncData {
   return {
     entries: mergeByNewest<BoxEntry>([...cloudData.entries, ...localData.entries]),
     teams: mergeByNewest<BattleTeam>([...cloudData.teams, ...localData.teams]),
+    history: mergeHistory(cloudData.history ?? [], localData.history ?? []),
   };
 }
 
@@ -106,6 +123,7 @@ export async function migrateLocalToCloud(userId: string): Promise<CloudSyncData
   const localData: CloudSyncData = {
     entries: loadBox(),
     teams: loadTeams(),
+    history: loadHistory(),
   };
 
   console.log(
@@ -116,17 +134,18 @@ export async function migrateLocalToCloud(userId: string): Promise<CloudSyncData
     "local teams=", localData.teams.length
   );
 
-  if (cloudData && (cloudData.entries.length > 0 || cloudData.teams.length > 0)) {
+  if (cloudData && (cloudData.entries.length > 0 || cloudData.teams.length > 0 || (cloudData.history ?? []).length > 0)) {
     const merged = mergeLocalAndCloud(cloudData, localData);
     if (
       merged.entries.length !== cloudData.entries.length ||
-      merged.teams.length !== cloudData.teams.length
+      merged.teams.length !== cloudData.teams.length ||
+      (merged.history ?? []).length !== (cloudData.history ?? []).length
     ) {
       await saveCloudDataToCloud(userId, merged);
       return merged;
     }
     return cloudData;
-  } else if (localData.entries.length > 0 || localData.teams.length > 0) {
+  } else if (localData.entries.length > 0 || localData.teams.length > 0 || (localData.history ?? []).length > 0) {
     await saveCloudDataToCloud(userId, localData);
     return localData;
   }
