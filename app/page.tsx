@@ -4109,6 +4109,26 @@ function PokemonPanel({
 }: PanelProps) {
   const { pokemon, level, nature, ivs, evs, teraType, isTerastallized, isDynamaxed, isMegaEvolved, megaForm, isBurned, isCharged, ability, item, fieldConditions } = state;
   const availableMegaForms = pokemon ? getMegaForms(pokemon.name) : [];
+  const activeMegaForm = useMemo(() => {
+    if (!isMegaEvolved || availableMegaForms.length === 0) return null;
+    return availableMegaForms.find((m) => m.slug === megaForm) ?? availableMegaForms[0];
+  }, [isMegaEvolved, megaForm, availableMegaForms]);
+
+  useEffect(() => {
+    if (!pokemon) return;
+
+    if (activeMegaForm) {
+      if (megaForm !== activeMegaForm.slug) onUpdate("megaForm", activeMegaForm.slug);
+      if (ability !== activeMegaForm.ability) onUpdate("ability", activeMegaForm.ability);
+      if (item !== activeMegaForm.megaStone) onUpdate("item", activeMegaForm.megaStone);
+      return;
+    }
+
+    if (megaForm !== null) onUpdate("megaForm", null);
+    if (pokemon.abilities.length > 0 && !pokemon.abilities.some((entry) => entry.slug === ability)) {
+      onUpdate("ability", pokemon.abilities[0].slug);
+    }
+  }, [pokemon, activeMegaForm, megaForm, ability, item, onUpdate]);
 
   // 技のカテゴリに基づいて表示するステータスを決定
   const visibleStats = (() => {
@@ -4170,10 +4190,9 @@ function PokemonPanel({
           <>
             <div className="flex items-center gap-3">
               {(() => {
-                const activeMega = isMegaEvolved && megaForm ? availableMegaForms.find((m) => m.slug === megaForm) : null;
-                const displaySprite = activeMega?.spriteUrl || pokemon.spriteUrl;
-                const displayName = activeMega?.jaName ?? pokemon.japaneseName;
-                const displayTypes = activeMega?.types ?? pokemon.types;
+                const displaySprite = activeMegaForm?.spriteUrl || pokemon.spriteUrl;
+                const displayName = activeMegaForm?.jaName ?? pokemon.japaneseName;
+                const displayTypes = activeMegaForm?.types ?? pokemon.types;
                 return (
                   <>
                     {displaySprite && (
@@ -4182,7 +4201,7 @@ function PokemonPanel({
                     <div>
                       <p className="font-bold text-lg text-gray-900">
                         {displayName}
-                        {activeMega && <span className="ml-1.5 text-[10px] font-bold text-purple-600 bg-purple-100 rounded px-1.5 py-0.5 align-middle">MEGA</span>}
+                        {activeMegaForm && <span className="ml-1.5 text-[10px] font-bold text-purple-600 bg-purple-100 rounded px-1.5 py-0.5 align-middle">MEGA</span>}
                         {isDynamaxed && <span className="ml-1.5 text-[10px] font-bold text-red-600 bg-red-100 rounded px-1.5 py-0.5 align-middle">D-MAX</span>}
                       </p>
                       <div className="flex gap-1 mt-1">
@@ -4310,11 +4329,8 @@ function PokemonPanel({
               level={level} nature={nature} ivs={ivs} evs={evs}
               abilities={(() => {
                 // メガシンカ中は元特性ではなく、メガ形態の特性だけを選択肢にする
-                if (isMegaEvolved && megaForm) {
-                  const mega = availableMegaForms.find((m) => m.slug === megaForm);
-                  if (mega) {
-                    return [{ slug: mega.ability, isHidden: false, slot: 1 }];
-                  }
+                if (activeMegaForm) {
+                  return [{ slug: activeMegaForm.ability, isHidden: false, slot: 1 }];
                 }
                 return pokemon.abilities;
               })()}
