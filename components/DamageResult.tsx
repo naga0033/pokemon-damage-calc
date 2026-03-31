@@ -465,9 +465,11 @@ export default function DamageResultPanel({ result, stealthRockHp, spikesHp, cur
                       title={formatModifierDetail(modifier.detail)}
                     >
                       <span className="font-semibold">{modifier.label}</span>
-                      <span className={`font-mono ${modifier.value > 1 ? "text-red-600" : modifier.value < 1 ? "text-blue-600" : "text-gray-500"}`}>
-                        ×{modifier.value.toFixed(2)}
-                      </span>
+                      {modifier.value != null && (
+                        <span className={`font-mono ${modifier.value > 1 ? "text-red-600" : modifier.value < 1 ? "text-blue-600" : "text-gray-500"}`}>
+                          ×{modifier.value.toFixed(2)}
+                        </span>
+                      )}
                       {modifier.detail && <span className="text-slate-400">{formatModifierDetail(modifier.detail)}</span>}
                     </span>
                   ))}
