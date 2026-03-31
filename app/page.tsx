@@ -3238,6 +3238,32 @@ export default function Home() {
     setPokemonHistory(saveHistory(entry));
   }, []);
 
+  const applyAttackerStateWithRegisteredMoves = useCallback(async (state: PokemonState, moves?: string[]) => {
+    setAttacker({
+      ...DEFAULT_STATE,
+      ...state,
+      statRanks: { ...DEFAULT_STATE.statRanks, ...state.statRanks },
+      fieldConditions: { ...DEFAULT_FIELD, ...state.fieldConditions },
+    });
+
+    const normalizedMoves = (moves ?? []).filter(Boolean);
+    setAttackerRegMoves(normalizedMoves);
+
+    const firstMoveSlug = normalizedMoves[0];
+    if (!firstMoveSlug) {
+      handleMoveSelect(null);
+      return;
+    }
+
+    try {
+      const move = await fetchMove(firstMoveSlug);
+      const ja = getMoveJaName(firstMoveSlug);
+      handleMoveSelect({ ...move, japaneseName: ja !== firstMoveSlug ? ja : move.japaneseName });
+    } catch {
+      handleMoveSelect(null);
+    }
+  }, [handleMoveSelect]);
+
   const handleAttackerSelect = useCallback(async (poke: PokemonData) => {
     // 選択した瞬間に履歴に保存する
     const newState: PokemonState = { ...DEFAULT_STATE, pokemon: poke, ability: poke.abilities[0]?.slug ?? "" };
@@ -3702,7 +3728,7 @@ export default function Home() {
         <BoxManager
           entries={boxEntries}
           teams={battleTeams}
-          onSelectAttacker={(s, moves) => { setAttacker(s); handleMoveSelect(null); setAttackerRegMoves(moves ?? []); }}
+          onSelectAttacker={(s, moves) => { void applyAttackerStateWithRegisteredMoves(s, moves); }}
           onSelectDefender={(s) => { setDefender(s); setDefenderCurrentHp(null); }}
           onEdit={(entry) => { setBoxManagerOpen(false); setInitialEditEntry(entry); setRegModalOpen(true); }}
           onDelete={(id) => {
@@ -3770,7 +3796,7 @@ export default function Home() {
             onHitCountChange={setHitCount}
             critCount={critCount}
             onCritCountChange={setCritCount}
-            onLoadFromBox={(s, moves) => { saveCurrentToHistory(attacker, attackerRegMoves); setAttacker({ ...DEFAULT_STATE, ...s, statRanks: { ...DEFAULT_STATE.statRanks, ...s.statRanks }, fieldConditions: { ...DEFAULT_FIELD, ...s.fieldConditions } }); handleMoveSelect(null); setAttackerRegMoves(moves ?? []); }}
+            onLoadFromBox={(s, moves) => { saveCurrentToHistory(attacker, attackerRegMoves); void applyAttackerStateWithRegisteredMoves(s, moves); }}
             pokemonHistory={pokemonHistory}
             boxEntries={boxEntries}
             battleTeams={battleTeams}
