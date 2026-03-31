@@ -9,7 +9,8 @@ export interface ItemEntry {
   /** ダメージ計算上の効果分類 */
   effect?: "choice-band" | "choice-specs" | "life-orb" | "expert-belt" |
            "type-boost" | "assault-vest" | "eviolite" | "rocky-helmet" |
-           "mega-stone" | "none";
+           "mega-stone" | "muscle-band" | "wise-glasses" |
+           "punching-glove" | "loaded-dice" | "none";
   /** type-boost の場合の対象タイプ */
   boostType?: string;
 }
@@ -23,7 +24,7 @@ export const ITEMS: ItemEntry[] = [
   { slug: "choice-scarf",     ja: "こだわりスカーフ",    effect: "none" },
   { slug: "focus-sash",       ja: "きあいのタスキ",      effect: "none" },
   { slug: "life-orb",         ja: "いのちのたま",        effect: "life-orb" },
-  { slug: "loaded-dice",      ja: "いかさまダイス",      effect: "none" },
+  { slug: "loaded-dice",      ja: "いかさまダイス",      effect: "loaded-dice" },
   { slug: "rocky-helmet",     ja: "ゴツゴツメット",      effect: "rocky-helmet" },
   { slug: "choice-specs",     ja: "こだわりメガネ",      effect: "choice-specs" },
   { slug: "choice-band",      ja: "こだわりハチマキ",    effect: "choice-band" },
@@ -43,11 +44,11 @@ export const ITEMS: ItemEntry[] = [
   { slug: "clear-amulet",     ja: "クリアチャーム",      effect: "none" },
   { slug: "mirror-herb",      ja: "ミラーハーブ",        effect: "none" },
   { slug: "covert-cloak",     ja: "おんみつマント",      effect: "none" },
-  { slug: "punching-glove",   ja: "パンチグローブ",      effect: "none" },
+  { slug: "punching-glove",   ja: "パンチグローブ",      effect: "punching-glove" },
   { slug: "iron-ball",        ja: "くろいてっきゅう",    effect: "none" },
   { slug: "scope-lens",       ja: "ピントレンズ",        effect: "none" },
-  { slug: "muscle-band",      ja: "ちからのハチマキ",    effect: "none" },
-  { slug: "wise-glasses",     ja: "ものしりめがね",      effect: "none" },
+  { slug: "muscle-band",      ja: "ちからのハチマキ",    effect: "muscle-band" },
+  { slug: "wise-glasses",     ja: "ものしりメガネ",      effect: "wise-glasses" },
   { slug: "protective-pads",  ja: "ぼうごパット",        effect: "none" },
   { slug: "shed-shell",       ja: "きれいなぬけがら",    effect: "none" },
   { slug: "terrain-extender", ja: "グランドコート",      effect: "none" },

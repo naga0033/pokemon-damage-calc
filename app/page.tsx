@@ -28,8 +28,8 @@ import { saveCloudDataToCloud, migrateLocalToCloud, subscribeToCloudChanges } fr
 import { KanaKeyboard } from "@/components/KanaKeyboard";
 import { POKEMON_MASTER_DATA } from "@/lib/pokemon-master-data";
 import { findBestJaMatch, getJaMatchCandidates, normalizeJaText } from "@/lib/japanese-match";
-import { normalizeOcrActualStats, normalizeOcrEvs, parseJapaneseLabeledActualStats, parseStatLetterActualStats, parseStatLetterEvs } from "@/lib/ocr-ev";
-import { countParsedFields, inferNatureAndEvsFromActualStats, mergeParsedResults, type ParsedPokeText, type ParseSuggestions } from "@/lib/ocr-parser";
+import { normalizeOcrActualStats, normalizeOcrEvs, parseJapaneseEvStatGrid, parseJapaneseLabeledActualStats, parseStatLetterActualStats, parseStatLetterEvs, parseStatLetterRows } from "@/lib/ocr-ev";
+import { countParsedFields, inferNatureAndEvsFromActualStats, inferNatureFromActualStatsAndEvs, mergeParsedResults, type ParsedPokeText, type ParseSuggestions } from "@/lib/ocr-parser";
 import { formatPokemonText } from "@/lib/pokemon-text";
 import { copyText } from "@/lib/clipboard";
 
@@ -357,8 +357,41 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
     const moves: string[] = [];
     let hasEvs = false;
     const unmatchedLines: string[] = []; // パターンに一致しなかった行
+    const isLikelyStatNoise = (line: string) =>
+      /[0-9＋+]/.test(line) || /(?:^|[^A-Z])[HABCDS](?:[^A-Z]|$)/i.test(line) || /努力値|実数値/.test(line);
+    const isLikelyMoveText = (line: string) =>
+      !isLikelyStatNoise(line)
+      && /[ぁ-んァ-ヶ一-龠]/.test(line)
+      && line.length >= 2
+      && line.length <= 12;
 
     for (const line of lines) {
+      const parsedEvStatGrid = parseJapaneseEvStatGrid(line);
+      const gridHasStats = Object.keys(parsedEvStatGrid.stats).length > 0;
+      const gridHasEvs = Object.keys(parsedEvStatGrid.evs).length > 0;
+      if (gridHasStats || gridHasEvs) {
+        Object.assign(actualStats, parsedEvStatGrid.stats);
+        if (gridHasEvs) {
+          Object.assign(evs, parsedEvStatGrid.evs);
+          hasEvs = true;
+        }
+        continue;
+      }
+
+      const parsedStatRows = parseStatLetterRows(line);
+      const rowHasStats = Object.keys(parsedStatRows.stats).length > 0;
+      const rowHasEvs = Object.keys(parsedStatRows.evs).length > 0;
+      if (rowHasStats || rowHasEvs) {
+        Object.assign(actualStats, parsedStatRows.stats);
+        if (rowHasEvs) {
+          Object.assign(evs, parsedStatRows.evs);
+          hasEvs = true;
+        }
+        if (rowHasStats && !/^[HABCDS]\s*[:：]?\s*\d{1,3}(?=$|\s*$)/i.test(line.trim())) {
+          continue;
+        }
+      }
+
       const parsedLetterEvs = parseStatLetterEvs(line);
       if (Object.keys(parsedLetterEvs).length > 0) {
         Object.assign(evs, parsedLetterEvs);
@@ -436,9 +469,16 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
       // ── 単独の技/持ち物/特性候補 ──
       const normalizedLine = normalizeJaText(line);
       const moveCandidate = findBestJaMatch(line, MOVE_JA_LIST);
-      if (moveCandidate && normalizeJaText(moveCandidate) === normalizedLine && moves.length < 4) {
+      if (!isLikelyStatNoise(line) && moveCandidate && normalizeJaText(moveCandidate) === normalizedLine && moves.length < 4) {
         moves.push(moveCandidate);
         continue;
+      }
+      if (isChampionsLayout && isLikelyMoveText(line) && moves.length < 4) {
+        const fuzzyMove = findBestJaMatch(line, MOVE_JA_LIST, { maxDistance: 2 });
+        if (fuzzyMove && !moves.includes(fuzzyMove) && fuzzyMove !== ability) {
+          moves.push(fuzzyMove);
+          continue;
+        }
       }
       const itemCandidate = findBestJaMatch(line, ITEM_JA_LIST);
       if (!item && itemCandidate && normalizeJaText(itemCandidate) === normalizedLine) {
@@ -448,6 +488,11 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
       const abilityCandidate = findBestJaMatch(line, ABILITY_JA_LIST);
       if (!ability && abilityCandidate && normalizeJaText(abilityCandidate) === normalizedLine) {
         ability = abilityCandidate;
+        continue;
+      }
+      const natureCandidate = findBestJaMatch(line, NATURE_JA_LIST);
+      if (!nature && natureCandidate && normalizeJaText(natureCandidate) === normalizedLine) {
+        nature = natureCandidate;
         continue;
       }
       // ── 1行目がポケモン名のみ ──
@@ -467,7 +512,9 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
         }
       }
       // パターン不一致→後段のコンテキスト推論に回す
-      unmatchedLines.push(line);
+      if (!isLikelyStatNoise(line)) {
+        unmatchedLines.push(line);
+      }
     }
 
     // ════════════════════════════════════════
@@ -565,7 +612,7 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
             if (moves.length >= 4) break;
           }
         }
-      if (moves.length === 0) {
+      if (moves.length === 0 && !isChampionsLayout) {
           for (const line of unmatchedLines) {
             const matchedMove = findBestJaMatch(line, MOVE_JA_LIST, { maxDistance: 2 });
             if (matchedMove && !moves.includes(matchedMove)) {
@@ -596,6 +643,17 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
 
     // 【EV】fullTextから「実数値(EV)-実数値(EV)-...」パターンを直接探す
     if (!hasEvs) {
+      const parsedRows = parseStatLetterRows(cleaned);
+      if (Object.keys(parsedRows.evs).length > 0) {
+        Object.assign(evs, parsedRows.evs);
+        hasEvs = true;
+      }
+      if (Object.keys(actualStats).length === 0 && Object.keys(parsedRows.stats).length > 0) {
+        Object.assign(actualStats, parsedRows.stats);
+      }
+    }
+
+    if (!hasEvs) {
       const parsedLetterEvs = parseStatLetterEvs(cleaned);
       if (Object.keys(parsedLetterEvs).length > 0) {
         Object.assign(evs, parsedLetterEvs);
@@ -604,8 +662,20 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
     }
 
     if (Object.keys(actualStats).length === 0) {
+      Object.assign(actualStats, parseJapaneseEvStatGrid(cleaned).stats);
       Object.assign(actualStats, parseStatLetterActualStats(cleaned));
       Object.assign(actualStats, parseJapaneseLabeledActualStats(cleaned));
+    }
+
+    if (!hasEvs) {
+      const parsedGrid = parseJapaneseEvStatGrid(cleaned);
+      if (Object.keys(parsedGrid.evs).length > 0) {
+        Object.assign(evs, parsedGrid.evs);
+        hasEvs = true;
+      }
+      if (Object.keys(actualStats).length === 0 && Object.keys(parsedGrid.stats).length > 0) {
+        Object.assign(actualStats, parsedGrid.stats);
+      }
     }
 
     if (!hasEvs) {
@@ -750,6 +820,7 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
     const ITEM_ALIAS: Record<string, string> = {
       "突撃チョッキ": "とつげきチョッキ", "拘りメガネ": "こだわりメガネ", "拘り鉢巻": "こだわりハチマキ",
       "拘りスカーフ": "こだわりスカーフ", "命の珠": "いのちのたま", "気合の襷": "きあいのタスキ",
+      "命の玉": "いのちのたま", "毒毒玉": "どくどくだま", "火炎玉": "かえんだま",
       "朽ちた剣": "くちたけん", "朽ちた盾": "くちたたて", "食べ残し": "たべのこし",
       "雷プレート": "いかずちプレート", "炎プレート": "ひのたまプレート",
       "水プレート": "しずくプレート", "草プレート": "みどりのプレート",
@@ -797,9 +868,18 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
 
     // ── EV ──
     const totalEv = Object.values(parsed.evs).reduce((a, b) => a + b, 0);
-    if (!parsed.isChampionsLayout && totalEv > 0) {
+    if (totalEv > 0) {
       setNewRegEvs({ hp: parsed.evs.hp, attack: parsed.evs.attack, defense: parsed.evs.defense, spAtk: parsed.evs.spAtk, spDef: parsed.evs.spDef, speed: parsed.evs.speed });
-    } else if (!parsed.isChampionsLayout && loadedPokemon && Object.keys(parsed.actualStats).length > 0) {
+    }
+    if (loadedPokemon && Object.keys(parsed.actualStats).length > 0) {
+      if (!parsed.nature && totalEv > 0) {
+        const inferredNature = inferNatureFromActualStatsAndEvs(loadedPokemon, parsed.actualStats, parsed.evs, resolvedNature);
+        if (inferredNature) {
+          setNewRegNature(inferredNature);
+          resolvedNature = inferredNature;
+        }
+      }
+      if (totalEv === 0) {
       const inferred = inferNatureAndEvsFromActualStats(loadedPokemon, parsed.actualStats, resolvedNature);
       if (inferred) {
         setNewRegEvs(inferred.evs);
@@ -807,6 +887,7 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
           setNewRegNature(inferred.nature);
           resolvedNature = inferred.nature;
         }
+      }
       }
     }
     // ── 持ち物（漢字変換 → 完全一致 → 含む一致フォールバック）──
@@ -976,13 +1057,14 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
 
       // ── 方法1: Tesseract.jsローカルOCR ──
       let localParsed: ReturnType<typeof parsePokeText> | null = null;
+      let localOcrText = "";
       try {
         const tesseractMod = await import("tesseract.js");
         const Tesseract = tesseractMod.default ?? tesseractMod;
         const { data } = await Tesseract.recognize(file, "jpn", { logger: () => {} });
-        const ocrText = data.text?.trim() ?? "";
-        if (ocrText.length >= 3) {
-          localParsed = parsePokeText(ocrText);
+        localOcrText = data.text?.trim() ?? "";
+        if (localOcrText.length >= 3) {
+          localParsed = parsePokeText(localOcrText);
         } else {
           setPasteText("");
         }
@@ -990,7 +1072,16 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
         // ローカルOCRに失敗してもAI補完を試す
       }
 
-      if (localParsed && localParsed.filledCount >= 4) {
+      const localHasEvs = localParsed ? Object.values(localParsed.evs).some((value) => value > 0) : false;
+      const localHasStats = localParsed ? Object.keys(localParsed.actualStats).length >= 4 : false;
+      const shouldTrustLocalOcr = !!localParsed
+        && localParsed.filledCount >= 6
+        && !!localParsed.item
+        && !!localParsed.nature
+        && (localHasEvs || localHasStats)
+        && !localParsed.isChampionsLayout;
+
+      if (shouldTrustLocalOcr && localParsed) {
         const warnings = await applyParsedData(localParsed);
         setOcrLoading(false);
         setPasteText("");
@@ -1009,7 +1100,11 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
         const res = await fetch("/api/parse-screenshot", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ imageBase64: dataUrl, mediaType: file.type || "image/png" }),
+          body: JSON.stringify({
+            imageBase64: dataUrl,
+            mediaType: file.type || "image/png",
+            ocrText: localOcrText || undefined,
+          }),
         });
 
         if (res.ok) {
@@ -2535,9 +2630,23 @@ function ReverseDamageSection({ rolls, defenderHp, minDamage, maxDamage, defende
 function FieldConditionsPanel({
   field,
   onChange,
+  isDoubles,
+  gravity,
+  onGravityChange,
+  defenderFlowerGift,
+  onDefenderFlowerGiftChange,
+  friendGuard,
+  onFriendGuardChange,
 }: {
   field: FieldConditions;
   onChange: (next: FieldConditions) => void;
+  isDoubles: boolean;
+  gravity: boolean;
+  onGravityChange: (next: boolean) => void;
+  defenderFlowerGift: boolean;
+  onDefenderFlowerGiftChange: (next: boolean) => void;
+  friendGuard: boolean;
+  onFriendGuardChange: (next: boolean) => void;
 }) {
   const toggle = (key: keyof Omit<FieldConditions, "spikesLayers">) => {
     onChange({ ...field, [key]: !field[key] });
@@ -2548,6 +2657,45 @@ function FieldConditionsPanel({
   return (
     <div className="border-t pt-3 space-y-2">
       <p className="text-xs font-semibold text-gray-500">防御側フィールド状態</p>
+
+      <div className="flex items-center gap-2">
+        <label className="flex items-center gap-1.5 text-[11px] cursor-pointer">
+          <input
+            type="checkbox"
+            checked={gravity}
+            onChange={(e) => onGravityChange(e.target.checked)}
+            className="rounded"
+          />
+          <span className="font-medium text-gray-600">じゅうりょく</span>
+        </label>
+        <Tooltip text={"じめん技がひこうタイプ・ふゆうにも当たる"} side="bottom" />
+      </div>
+
+      {isDoubles && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="text-[11px] font-semibold text-gray-500">ダブル防御補助</span>
+          <label className="flex items-center gap-1 text-[11px] cursor-pointer">
+            <input
+              type="checkbox"
+              checked={defenderFlowerGift}
+              onChange={(e) => onDefenderFlowerGiftChange(e.target.checked)}
+              className="rounded w-3.5 h-3.5"
+            />
+            <span className="font-medium text-gray-600">フラワーギフト</span>
+            <Tooltip text={"味方チェリムの特性。晴れのとき特防が1.5倍"} side="bottom" />
+          </label>
+          <label className="flex items-center gap-1 text-[11px] cursor-pointer">
+            <input
+              type="checkbox"
+              checked={friendGuard}
+              onChange={(e) => onFriendGuardChange(e.target.checked)}
+              className="rounded w-3.5 h-3.5"
+            />
+            <span className="font-medium text-gray-600">ともだちガード</span>
+            <Tooltip text={"味方の特性。受けるダメージが0.75倍"} side="bottom" />
+          </label>
+        </div>
+      )}
 
       {/* 壁 */}
       <div className="space-y-1">
@@ -2762,6 +2910,14 @@ export default function Home() {
 
   const [weather, setWeather] = useState<WeatherCondition>("none");
   const [terrain, setTerrain] = useState<TerrainCondition>("none");
+  const [isDoubles, setIsDoubles] = useState(false);
+  const [helpingHand, setHelpingHand] = useState(false);
+  const [steelworker, setSteelworker] = useState(false);
+  const [powerSpot, setPowerSpot] = useState(false);
+  const [flowerGift, setFlowerGift] = useState(false);
+  const [defenderFlowerGift, setDefenderFlowerGift] = useState(false);
+  const [friendGuard, setFriendGuard] = useState(false);
+  const [gravity, setGravity] = useState(false);
   const [regModalOpen, setRegModalOpen] = useState(false);
   const [boxManagerOpen, setBoxManagerOpen] = useState(false);
   const [boxEntries, setBoxEntries] = useState<BoxEntry[]>(() => {
@@ -3055,6 +3211,14 @@ export default function Home() {
       attackerIsGrounded: isGrounded(attacker.pokemon.types, attacker.ability, attacker.item, attacker.teraType, attacker.isTerastallized),
       defenderIsGrounded: isGrounded(defender.pokemon.types, defender.ability, defender.item, defender.teraType, defender.isTerastallized),
       attackerAbilityBoostedStat: getAbilityBoostedStat(attacker.ability, useStats, weather, terrain),
+      isDoubles,
+      helpingHand,
+      steelworker,
+      powerSpot,
+      flowerGift,
+      defenderFlowerGift,
+      friendGuard,
+      gravity,
     });
 
     // みがわりシミュレーション
@@ -3101,7 +3265,7 @@ export default function Home() {
     }
 
     return result;
-  }, [attacker, defender, finalMove, effectiveMove, attackerStats, megaAttackerStats, defenderStats, isCritical, weather, terrain, hitCount, critCount, defenderCurrentHp, isPaybackDoubled]);
+  }, [attacker, defender, finalMove, effectiveMove, attackerStats, megaAttackerStats, defenderStats, isCritical, weather, terrain, hitCount, critCount, defenderCurrentHp, isPaybackDoubled, isDoubles, helpingHand, steelworker, powerSpot, flowerGift, defenderFlowerGift, friendGuard, gravity]);
 
   // 2回目の攻撃のダメージ計算
   const damageResult2 = useMemo(() => {
@@ -3134,8 +3298,16 @@ export default function Home() {
       attackerIsGrounded: isGrounded(attacker.pokemon.types, attacker.ability, attacker.item, attacker.teraType, attacker.isTerastallized),
       defenderIsGrounded: isGrounded(defender.pokemon.types, defender.ability, defender.item, defender.teraType, defender.isTerastallized),
       attackerAbilityBoostedStat: getAbilityBoostedStat(attacker.ability, useStats, weather, terrain),
+      isDoubles,
+      helpingHand,
+      steelworker,
+      powerSpot,
+      flowerGift,
+      defenderFlowerGift,
+      friendGuard,
+      gravity,
     });
-  }, [showSecondAttack, selectedMove2, attacker, defender, attackerStats, megaAttackerStats, defenderStats, isCritical2, weather, terrain, hitCount2, critCount2]);
+  }, [showSecondAttack, selectedMove2, attacker, defender, attackerStats, megaAttackerStats, defenderStats, isCritical2, weather, terrain, hitCount2, critCount2, isDoubles, helpingHand, steelworker, powerSpot, flowerGift, defenderFlowerGift, friendGuard, gravity]);
 
   // ステルスロック・まきびしダメージの計算
   const hazardInfo = useMemo(() => {
@@ -3320,15 +3492,49 @@ export default function Home() {
         />
       )}
 
-      <main className="max-w-[1400px] mx-auto px-2 py-2 space-y-2">
-        {/* 攻守入れ替え */}
-        <div className="flex justify-start">
+      <main className="max-w-[1400px] mx-auto px-2 py-2 pb-24 lg:pb-2 space-y-2">
+        {/* 攻守入れ替え + 対戦形式 */}
+        <div className="flex items-center justify-start gap-2">
           <button
             onClick={handleSwap}
             className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors bg-white hover:bg-gray-50 active:bg-gray-100" style={{ border: "1px solid #e0e0e0", color: "#555", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}
           >
             ⇄ 攻守入れ替え
           </button>
+          <div
+            className="inline-flex lg:hidden items-center rounded-md overflow-hidden bg-white"
+            style={{ border: "1px solid #e0e0e0", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}
+          >
+            <button
+              onClick={() => setIsDoubles(false)}
+              className={`px-3 py-1.5 text-xs font-semibold transition-colors ${!isDoubles ? "bg-sky-500 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
+            >
+              シングル
+            </button>
+            <button
+              onClick={() => setIsDoubles(true)}
+              className={`px-3 py-1.5 text-xs font-semibold transition-colors ${isDoubles ? "bg-sky-500 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
+            >
+              ダブル
+            </button>
+          </div>
+          <div
+            className="hidden lg:inline-flex items-center rounded-md overflow-hidden bg-white"
+            style={{ border: "1px solid #e0e0e0", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }}
+          >
+            <button
+              onClick={() => setIsDoubles(false)}
+              className={`px-4 py-1.5 text-xs font-semibold transition-colors ${!isDoubles ? "bg-sky-500 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
+            >
+              シングル
+            </button>
+            <button
+              onClick={() => setIsDoubles(true)}
+              className={`px-4 py-1.5 text-xs font-semibold transition-colors ${isDoubles ? "bg-sky-500 text-white" : "bg-white text-gray-500 hover:bg-gray-50"}`}
+            >
+              ダブル
+            </button>
+          </div>
         </div>
 
         {/* メイン2カラム + 結果 */}
@@ -3364,6 +3570,15 @@ export default function Home() {
             defenderWeight={defender.pokemon?.weight}
             isPaybackDoubled={isPaybackDoubled}
             onPaybackDoubledChange={setIsPaybackDoubled}
+            isDoubles={isDoubles}
+            helpingHand={helpingHand}
+            onHelpingHandChange={setHelpingHand}
+            steelworker={steelworker}
+            onSteelworkerChange={setSteelworker}
+            powerSpot={powerSpot}
+            onPowerSpotChange={setPowerSpot}
+            flowerGift={flowerGift}
+            onFlowerGiftChange={setFlowerGift}
             secondAttack={{
               show: showSecondAttack,
               onToggle: setShowSecondAttack,
@@ -3414,6 +3629,22 @@ export default function Home() {
                 </button>
               </span>
             ))}
+            <span className="basis-full h-0" />
+            <span className="hidden lg:inline text-[10px] font-semibold text-gray-400">対戦形式</span>
+            <div className="hidden lg:inline-flex rounded-full border border-gray-200 overflow-hidden">
+              <button
+                onClick={() => setIsDoubles(false)}
+                className={`text-[10px] px-2 py-0.5 ${!isDoubles ? "bg-sky-500 text-white" : "bg-white text-gray-500"}`}
+              >
+                シングル
+              </button>
+              <button
+                onClick={() => setIsDoubles(true)}
+                className={`text-[10px] px-2 py-0.5 ${isDoubles ? "bg-sky-500 text-white" : "bg-white text-gray-500"}`}
+              >
+                ダブル
+              </button>
+            </div>
           </div>
 
           {/* 防御側 + 逆算ツール */}
@@ -3435,6 +3666,13 @@ export default function Home() {
               battleTeams={battleTeams}
               currentHp={defenderCurrentHp}
               onCurrentHpChange={setDefenderCurrentHp}
+              isDoubles={isDoubles}
+              gravity={gravity}
+              onGravityChange={setGravity}
+              defenderFlowerGift={defenderFlowerGift}
+              onDefenderFlowerGiftChange={setDefenderFlowerGift}
+              friendGuard={friendGuard}
+              onFriendGuardChange={setFriendGuard}
             />
             {damageResult && effectiveMove && <ReverseDamageSection
               rolls={damageResult.rolls} defenderHp={damageResult.defenderHp}
@@ -3679,6 +3917,42 @@ export default function Home() {
 
       </main>
 
+      {damageResult && finalMove && attacker.pokemon && defender.pokemon && defenderStats && (
+        <div className="fixed inset-x-0 bottom-0 z-40 lg:hidden border-t border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85 shadow-[0_-8px_24px_rgba(15,23,42,0.12)]">
+          <div className="px-3 py-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
+            <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
+              <div className="min-w-0 text-left">
+                <p className="text-[10px] font-semibold text-red-500">攻撃側</p>
+                <p className="truncate text-sm font-bold text-gray-900">{attacker.pokemon.japaneseName}</p>
+                <p className="text-[11px] text-gray-500">{finalMove.japaneseName}</p>
+              </div>
+
+              <div className="min-w-0">
+                <div className="flex items-center justify-between text-[11px] font-semibold text-gray-700">
+                  <span>{damageResult.koLabel}</span>
+                  <span>{damageResult.minDamage}〜{damageResult.maxDamage}</span>
+                </div>
+                <div className="mt-1 h-4 overflow-hidden rounded-full bg-gray-200">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500"
+                    style={{ width: `${Math.min(damageResult.maxPercent, 100)}%` }}
+                  />
+                </div>
+                <div className="mt-1 text-center text-[12px] font-bold text-gray-900">
+                  {damageResult.minPercent.toFixed(1)}〜{damageResult.maxPercent.toFixed(1)}%
+                </div>
+              </div>
+
+              <div className="min-w-0 text-right">
+                <p className="text-[10px] font-semibold text-sky-500">防御側</p>
+                <p className="truncate text-sm font-bold text-gray-900">{defender.pokemon.japaneseName}</p>
+                <p className="text-[11px] text-gray-500">HP {defenderStats.hp}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <footer className="text-center py-6 px-4 space-y-2" style={{ color: "#888" }}>
         <p className="text-xs">ポケモンデータ: PokéAPI | 画像認識: Claude API (Anthropic)</p>
         <p className="text-xs">このサイトはポケモン対戦向けの非公式ファンツールです。</p>
@@ -3757,6 +4031,21 @@ interface PanelProps {
     critCount: number;
     onCritCountChange: (v: number) => void;
   };
+  isDoubles?: boolean;
+  helpingHand?: boolean;
+  onHelpingHandChange?: (v: boolean) => void;
+  steelworker?: boolean;
+  onSteelworkerChange?: (v: boolean) => void;
+  powerSpot?: boolean;
+  onPowerSpotChange?: (v: boolean) => void;
+  flowerGift?: boolean;
+  onFlowerGiftChange?: (v: boolean) => void;
+  gravity?: boolean;
+  onGravityChange?: (v: boolean) => void;
+  defenderFlowerGift?: boolean;
+  onDefenderFlowerGiftChange?: (v: boolean) => void;
+  friendGuard?: boolean;
+  onFriendGuardChange?: (v: boolean) => void;
 }
 
 function PokemonPanel({
@@ -3768,6 +4057,9 @@ function PokemonPanel({
   weather, onWeatherChange, terrain, onTerrainChange,
   currentHp, onCurrentHpChange, attackerWeight, defenderWeight,
   isPaybackDoubled: panelPaybackDoubled, onPaybackDoubledChange, secondAttack,
+  isDoubles, helpingHand, onHelpingHandChange, steelworker, onSteelworkerChange,
+  powerSpot, onPowerSpotChange, flowerGift, onFlowerGiftChange, gravity, onGravityChange,
+  defenderFlowerGift, onDefenderFlowerGiftChange, friendGuard, onFriendGuardChange,
 }: PanelProps) {
   const { pokemon, level, nature, ivs, evs, teraType, isTerastallized, isDynamaxed, isMegaEvolved, megaForm, isBurned, isCharged, ability, item, fieldConditions } = state;
   const availableMegaForms = pokemon ? getMegaForms(pokemon.name) : [];
@@ -3986,25 +4278,56 @@ function PokemonPanel({
 
             {/* コンディション（急所・やけど・じゅうでん）— 攻撃側のみ */}
             {showMoveSelector && (
-              <div className="flex flex-wrap gap-x-3 gap-y-1 pt-1">
-                <label className="flex items-center gap-1 text-[11px] cursor-pointer">
-                  <input type="checkbox" checked={isCritical ?? false}
-                    onChange={(e) => onCriticalChange?.(e.target.checked)} className="rounded w-3.5 h-3.5" />
-                  <span className="font-medium text-gray-600">急所</span>
-                  <Tooltip text={"ダメージ×1.5倍\n防御側のランクアップ・壁効果を無視"} />
-                </label>
-                <label className="flex items-center gap-1 text-[11px] cursor-pointer">
-                  <input type="checkbox" checked={isBurned}
-                    onChange={(e) => onUpdate("isBurned", e.target.checked)} className="rounded w-3.5 h-3.5" />
-                  <span className="font-medium text-gray-600">やけど</span>
-                  <Tooltip text={"物理技のダメージが0.5倍\n毎ターンHP1/16削れる"} />
-                </label>
-                <label className="flex items-center gap-1 text-[11px] cursor-pointer">
-                  <input type="checkbox" checked={isCharged}
-                    onChange={(e) => onUpdate("isCharged", e.target.checked)} className="rounded w-3.5 h-3.5" />
-                  <span className="font-medium text-gray-600">じゅうでん</span>
-                  <Tooltip text={"でんき技の威力が2倍"} />
-                </label>
+              <div className="space-y-1 pt-1">
+                <div className="flex flex-wrap gap-x-3 gap-y-1">
+                  <label className="flex items-center gap-1 text-[11px] cursor-pointer">
+                    <input type="checkbox" checked={isCritical ?? false}
+                      onChange={(e) => onCriticalChange?.(e.target.checked)} className="rounded w-3.5 h-3.5" />
+                    <span className="font-medium text-gray-600">急所</span>
+                    <Tooltip text={"ダメージ×1.5倍\n防御側のランクアップ・壁効果を無視"} />
+                  </label>
+                  <label className="flex items-center gap-1 text-[11px] cursor-pointer">
+                    <input type="checkbox" checked={isBurned}
+                      onChange={(e) => onUpdate("isBurned", e.target.checked)} className="rounded w-3.5 h-3.5" />
+                    <span className="font-medium text-gray-600">やけど</span>
+                    <Tooltip text={"物理技のダメージが0.5倍\n毎ターンHP1/16削れる"} />
+                  </label>
+                  <label className="flex items-center gap-1 text-[11px] cursor-pointer">
+                    <input type="checkbox" checked={isCharged}
+                      onChange={(e) => onUpdate("isCharged", e.target.checked)} className="rounded w-3.5 h-3.5" />
+                    <span className="font-medium text-gray-600">じゅうでん</span>
+                    <Tooltip text={"でんき技の威力が2倍"} />
+                  </label>
+                </div>
+                {isDoubles && (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="text-[11px] font-semibold text-gray-500">ダブル補助</span>
+                    <label className="flex items-center gap-1 text-[11px] cursor-pointer">
+                      <input type="checkbox" checked={helpingHand ?? false}
+                        onChange={(e) => onHelpingHandChange?.(e.target.checked)} className="rounded w-3.5 h-3.5" />
+                      <span className="font-medium text-gray-600">てだすけ</span>
+                      <Tooltip text={"味方の攻撃を補助\n選んだ技の威力が1.5倍"} />
+                    </label>
+                    <label className="flex items-center gap-1 text-[11px] cursor-pointer">
+                      <input type="checkbox" checked={steelworker ?? false}
+                        onChange={(e) => onSteelworkerChange?.(e.target.checked)} className="rounded w-3.5 h-3.5" />
+                      <span className="font-medium text-gray-600">はがねのせいしん</span>
+                      <Tooltip text={"味方のはがね技を強化\nはがね技の威力が1.5倍"} />
+                    </label>
+                    <label className="flex items-center gap-1 text-[11px] cursor-pointer">
+                      <input type="checkbox" checked={powerSpot ?? false}
+                        onChange={(e) => onPowerSpotChange?.(e.target.checked)} className="rounded w-3.5 h-3.5" />
+                      <span className="font-medium text-gray-600">パワースポット</span>
+                      <Tooltip text={"味方の技の威力を底上げ\nすべての攻撃技が1.3倍"} />
+                    </label>
+                    <label className="flex items-center gap-1 text-[11px] cursor-pointer">
+                      <input type="checkbox" checked={flowerGift ?? false}
+                        onChange={(e) => onFlowerGiftChange?.(e.target.checked)} className="rounded w-3.5 h-3.5" />
+                      <span className="font-medium text-gray-600">フラワーギフト</span>
+                      <Tooltip text={"晴れのとき味方を強化\n物理技の攻撃が1.5倍"} />
+                    </label>
+                  </div>
+                )}
               </div>
             )}
 
@@ -4059,6 +4382,13 @@ function PokemonPanel({
               <FieldConditionsPanel
                 field={fieldConditions}
                 onChange={(next) => onUpdate("fieldConditions", next)}
+                isDoubles={isDoubles ?? false}
+                gravity={gravity ?? false}
+                onGravityChange={onGravityChange ?? (() => {})}
+                defenderFlowerGift={defenderFlowerGift ?? false}
+                onDefenderFlowerGiftChange={onDefenderFlowerGiftChange ?? (() => {})}
+                friendGuard={friendGuard ?? false}
+                onFriendGuardChange={onFriendGuardChange ?? (() => {})}
               />
             )}
           </>

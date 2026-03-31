@@ -42,6 +42,7 @@ export interface MoveData {
   japaneseName: string;
   type: PokemonType;
   category: MoveCategory;
+  target?: string | null;
   power: number | null;
   accuracy: number | null;
   priority: number;
@@ -137,6 +138,6 @@ export interface DamageResult {
 
 export interface DamageModifier {
   label: string;
-  value: number;
+  value: number | null;
   detail?: string;
 }

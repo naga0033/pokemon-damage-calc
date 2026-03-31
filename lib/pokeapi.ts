@@ -401,6 +401,7 @@ export async function fetchMove(name: string): Promise<MoveData> {
     japaneseName,
     type: toType(move.type?.name ?? "normal"),
     category,
+    target: move.target?.name ?? null,
     power: move.power ?? null,
     accuracy: move.accuracy ?? null,
     priority: move.priority ?? 0,
