@@ -16,6 +16,7 @@ export interface MegaForm {
 const S = (id: number) => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${id}.png`;
 const ART = (id: number) => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/${id}.png`;
 const SHOWDOWN = (name: string) => `https://play.pokemonshowdown.com/sprites/gen5/${name}.png`;
+const ZUKAN = (hash: string) => `https://zukan.pokemon.co.jp/zukan-api/up/images/index/${hash}.png`;
 
 export const MEGA_FORMS: MegaForm[] = [
   // --- カントー ---
@@ -311,13 +312,13 @@ export const MEGA_FORMS: MegaForm[] = [
   // --- Zメガシンカ（DLC メガディメンション） ---
   { slug: "absol-mega-z", baseSlug: "absol", jaName: "メガアブソルZ",
     types: ["dark", "ghost"], baseStats: { hp: 65, attack: 154, defense: 60, spAtk: 75, spDef: 60, speed: 151 },
-    ability: "magic-bounce", abilityJa: "マジックミラー", megaStone: "absolite-z", megaStoneJa: "アブソルナイトZ", spriteUrl: ART(10307) },
+    ability: "magic-bounce", abilityJa: "マジックミラー", megaStone: "absolite-z", megaStoneJa: "アブソルナイトZ", spriteUrl: ZUKAN("15204dc7bd3da836adeae5cfe4364633") },
   { slug: "garchomp-mega-z", baseSlug: "garchomp", jaName: "メガガブリアスZ",
     types: ["dragon"], baseStats: { hp: 108, attack: 130, defense: 85, spAtk: 141, spDef: 85, speed: 151 },
-    ability: "sand-force", abilityJa: "すなのちから", megaStone: "garchompite-z", megaStoneJa: "ガブリアスナイトZ", spriteUrl: SHOWDOWN("garchomp-mega") },
+    ability: "sand-force", abilityJa: "すなのちから", megaStone: "garchompite-z", megaStoneJa: "ガブリアスナイトZ", spriteUrl: ZUKAN("4f6bd54dafaef1dd0e132ba15e575744d32466cd") },
   { slug: "lucario-mega-z", baseSlug: "lucario", jaName: "メガルカリオZ",
     types: ["fighting", "steel"], baseStats: { hp: 70, attack: 100, defense: 70, spAtk: 164, spDef: 70, speed: 151 },
-    ability: "adaptability", abilityJa: "てきおうりょく", megaStone: "lucarionite-z", megaStoneJa: "ルカリオナイトZ", spriteUrl: ART(10310) },
+    ability: "adaptability", abilityJa: "てきおうりょく", megaStone: "lucarionite-z", megaStoneJa: "ルカリオナイトZ", spriteUrl: ZUKAN("9910f2b09a49b21d30d06226f653b099") },
 ];
 
 /** ポケモンslugから利用可能なメガシンカフォームを取得 */
