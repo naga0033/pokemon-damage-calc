@@ -72,6 +72,8 @@ interface DamageInput {
   friendGuard?: boolean;
   /** じゅうりょく */
   gravity?: boolean;
+  /** そうだいしょうの対象になるひんし味方数 */
+  supremeOverlordFaintedAllies?: number;
 }
 
 const PUNCH_MOVES = new Set([
@@ -461,6 +463,14 @@ export function calcDamage(input: DamageInput): DamageResult {
   if (attackerAbility === "water-bubble" && effectiveMoveType === "water") {
     effectivePower = Math.floor(effectivePower * 2);
     modifiers.push({ label: "すいほう", value: 2, detail: "みず技の威力2倍" });
+  }
+  if (attackerAbility === "supreme-overlord") {
+    const faintedAllies = Math.max(0, Math.min(5, input.supremeOverlordFaintedAllies ?? 0));
+    if (faintedAllies > 0) {
+      const supremeOverlordMod = 1 + faintedAllies * 0.1;
+      effectivePower = Math.floor(effectivePower * supremeOverlordMod);
+      modifiers.push({ label: "そうだいしょう", value: supremeOverlordMod, detail: `ひんし味方${faintedAllies}体` });
+    }
   }
   if (atkItem?.effect === "muscle-band" && move.category === "physical") {
     effectivePower = Math.floor(effectivePower * 1.1);

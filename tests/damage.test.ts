@@ -42,6 +42,7 @@ function createInput(move: MoveData, overrides: Record<string, unknown> = {}) {
     attackerIsGrounded: true,
     defenderIsGrounded: true,
     attackerAbilityBoostedStat: null,
+    supremeOverlordFaintedAllies: 0,
     ...overrides,
   };
 }
@@ -657,6 +658,39 @@ test("common offensive abilities boost the matching move groups", () => {
     attackerTypes: ["bug"] as PokemonType[],
     defenderTypes: ["dark"] as PokemonType[],
   })).maxDamage);
+});
+
+test("supreme overlord scales with fainted allies", () => {
+  const move = baseMove({
+    name: "kowtow-cleave",
+    japaneseName: "ドゲザン",
+    type: "dark",
+    category: "physical",
+    power: 85,
+  });
+
+  const neutral = calcDamage(createInput(move, {
+    attackerAbility: "supreme-overlord",
+    attackerTypes: ["dark"] as PokemonType[],
+    defenderTypes: ["ghost"] as PokemonType[],
+    supremeOverlordFaintedAllies: 0,
+  }));
+  const threeFainted = calcDamage(createInput(move, {
+    attackerAbility: "supreme-overlord",
+    attackerTypes: ["dark"] as PokemonType[],
+    defenderTypes: ["ghost"] as PokemonType[],
+    supremeOverlordFaintedAllies: 3,
+  }));
+  const fiveFainted = calcDamage(createInput(move, {
+    attackerAbility: "supreme-overlord",
+    attackerTypes: ["dark"] as PokemonType[],
+    defenderTypes: ["ghost"] as PokemonType[],
+    supremeOverlordFaintedAllies: 5,
+  }));
+
+  assert.ok(threeFainted.maxDamage > neutral.maxDamage);
+  assert.ok(fiveFainted.maxDamage > threeFainted.maxDamage);
+  assert.equal(fiveFainted.modifiers?.some((modifier) => modifier.label === "そうだいしょう"), true);
 });
 
 test("sniper, tinted lens, punk rock defense, and bulletproof apply their special rules", () => {

@@ -2934,6 +2934,7 @@ export default function Home() {
   const [defenderFlowerGift, setDefenderFlowerGift] = useState(false);
   const [friendGuard, setFriendGuard] = useState(false);
   const [gravity, setGravity] = useState(false);
+  const [supremeOverlordFaintedAllies, setSupremeOverlordFaintedAllies] = useState(0);
   const [regModalOpen, setRegModalOpen] = useState(false);
   const [boxManagerOpen, setBoxManagerOpen] = useState(false);
   const [boxEntries, setBoxEntries] = useState<BoxEntry[]>(() => {
@@ -3240,6 +3241,7 @@ export default function Home() {
       defenderFlowerGift,
       friendGuard,
       gravity,
+      supremeOverlordFaintedAllies,
     });
 
     // みがわりシミュレーション
@@ -3286,7 +3288,7 @@ export default function Home() {
     }
 
     return result;
-  }, [attacker, defender, finalMove, effectiveMove, attackerStats, megaAttackerStats, defenderStats, isCritical, weather, terrain, hitCount, critCount, defenderCurrentHp, isPaybackDoubled, isDoubles, helpingHand, steelworker, powerSpot, flowerGift, defenderFlowerGift, friendGuard, gravity]);
+  }, [attacker, defender, finalMove, effectiveMove, attackerStats, megaAttackerStats, defenderStats, isCritical, weather, terrain, hitCount, critCount, defenderCurrentHp, isPaybackDoubled, isDoubles, helpingHand, steelworker, powerSpot, flowerGift, defenderFlowerGift, friendGuard, gravity, supremeOverlordFaintedAllies]);
 
   // 2回目の攻撃のダメージ計算
   const damageResult2 = useMemo(() => {
@@ -3327,8 +3329,9 @@ export default function Home() {
       defenderFlowerGift,
       friendGuard,
       gravity,
+      supremeOverlordFaintedAllies,
     });
-  }, [showSecondAttack, selectedMove2, attacker, defender, attackerStats, megaAttackerStats, defenderStats, isCritical2, weather, terrain, hitCount2, critCount2, isDoubles, helpingHand, steelworker, powerSpot, flowerGift, defenderFlowerGift, friendGuard, gravity]);
+  }, [showSecondAttack, selectedMove2, attacker, defender, attackerStats, megaAttackerStats, defenderStats, isCritical2, weather, terrain, hitCount2, critCount2, isDoubles, helpingHand, steelworker, powerSpot, flowerGift, defenderFlowerGift, friendGuard, gravity, supremeOverlordFaintedAllies]);
 
   // ステルスロック・まきびしダメージの計算
   const hazardInfo = useMemo(() => {
@@ -3599,11 +3602,13 @@ export default function Home() {
             onHelpingHandChange={setHelpingHand}
             steelworker={steelworker}
             onSteelworkerChange={setSteelworker}
-            powerSpot={powerSpot}
-            onPowerSpotChange={setPowerSpot}
-            flowerGift={flowerGift}
-            onFlowerGiftChange={setFlowerGift}
-            secondAttack={{
+              powerSpot={powerSpot}
+              onPowerSpotChange={setPowerSpot}
+              flowerGift={flowerGift}
+              onFlowerGiftChange={setFlowerGift}
+              supremeOverlordFaintedAllies={supremeOverlordFaintedAllies}
+              onSupremeOverlordFaintedAlliesChange={setSupremeOverlordFaintedAllies}
+              secondAttack={{
               show: showSecondAttack,
               onToggle: setShowSecondAttack,
               selectedMove: selectedMove2,
@@ -4084,6 +4089,8 @@ interface PanelProps {
   friendGuard?: boolean;
   onFriendGuardChange?: (v: boolean) => void;
   canUseDisguise?: boolean;
+  supremeOverlordFaintedAllies?: number;
+  onSupremeOverlordFaintedAlliesChange?: (v: number) => void;
 }
 
 function PokemonPanel({
@@ -4098,6 +4105,7 @@ function PokemonPanel({
   isDoubles, helpingHand, onHelpingHandChange, steelworker, onSteelworkerChange,
   powerSpot, onPowerSpotChange, flowerGift, onFlowerGiftChange, gravity, onGravityChange,
   defenderFlowerGift, onDefenderFlowerGiftChange, friendGuard, onFriendGuardChange, canUseDisguise,
+  supremeOverlordFaintedAllies, onSupremeOverlordFaintedAlliesChange,
 }: PanelProps) {
   const { pokemon, level, nature, ivs, evs, teraType, isTerastallized, isDynamaxed, isMegaEvolved, megaForm, isBurned, isCharged, ability, item, fieldConditions } = state;
   const availableMegaForms = pokemon ? getMegaForms(pokemon.name) : [];
@@ -4364,6 +4372,30 @@ function PokemonPanel({
                       <span className="font-medium text-gray-600">フラワーギフト</span>
                       <Tooltip text={"晴れのとき味方を強化\n物理技の攻撃が1.5倍"} />
                     </label>
+                  </div>
+                )}
+                {ability === "supreme-overlord" && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[11px] font-semibold text-gray-500">そうだいしょう</span>
+                    <span className="text-[11px] text-gray-500">ひんし味方数</span>
+                    <div className="inline-flex rounded-lg border border-gray-200 overflow-hidden">
+                      {[0, 1, 2, 3, 4, 5].map((count) => {
+                        const active = (supremeOverlordFaintedAllies ?? 0) === count;
+                        return (
+                          <button
+                            key={count}
+                            type="button"
+                            onClick={() => onSupremeOverlordFaintedAlliesChange?.(count)}
+                            className={`text-[11px] min-w-8 px-2 py-1 font-medium border-r last:border-r-0 ${
+                              active ? "bg-slate-700 text-white border-slate-700" : "bg-white text-gray-500 border-gray-200 hover:bg-gray-50"
+                            }`}
+                          >
+                            {count}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <Tooltip text={"ドドゲザンの特性。ひんしの味方1体ごとに攻撃技の威力が1.1倍、最大1.5倍"} side="bottom" />
                   </div>
                 )}
               </div>
