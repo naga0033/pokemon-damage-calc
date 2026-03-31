@@ -3066,11 +3066,10 @@ export default function Home() {
   }, []);
 
   const handleAttackerSelect = useCallback(async (poke: PokemonData) => {
-    // 前のポケモンの状態を履歴に保存（setter の外で実行）
-    if (attacker.pokemon && attacker.pokemon.name !== poke.name) {
-      saveCurrentToHistory(attacker, attackerRegMoves);
-    }
-    setAttacker({ ...DEFAULT_STATE, pokemon: poke, ability: poke.abilities[0]?.slug ?? "" });
+    // 選択した瞬間に履歴に保存する
+    const newState: PokemonState = { ...DEFAULT_STATE, pokemon: poke, ability: poke.abilities[0]?.slug ?? "" };
+    saveCurrentToHistory(newState);
+    setAttacker(newState);
 
     // 自動技選択: 採用率1位のダメージ技を選ぶ（必ずそのポケモンが覚える技のみ）
     const learnset = new Set(poke.moveNames);
@@ -3095,14 +3094,14 @@ export default function Home() {
     } else {
       handleMoveSelect(null);
     }
-  }, [handleMoveSelect, saveCurrentToHistory, attacker, attackerRegMoves]);
+  }, [handleMoveSelect, saveCurrentToHistory]);
 
   const handleDefenderSelect = useCallback((poke: PokemonData) => {
-    if (defender.pokemon && defender.pokemon.name !== poke.name) {
-      saveCurrentToHistory(defender);
-    }
-    setDefender({ ...DEFAULT_STATE, pokemon: poke, ability: poke.abilities[0]?.slug ?? "" });
-  }, [saveCurrentToHistory, defender]);
+    // 選択した瞬間に履歴に保存する
+    const newState: PokemonState = { ...DEFAULT_STATE, pokemon: poke, ability: poke.abilities[0]?.slug ?? "" };
+    saveCurrentToHistory(newState);
+    setDefender(newState);
+  }, [saveCurrentToHistory]);
 
   const defenderCanUseDisguise = useMemo(() => {
     if (!defender.pokemon) return false;
@@ -4259,8 +4258,11 @@ function PokemonPanel({
                           const first = availableMegaForms[0];
                           onUpdate("megaForm", first.slug);
                           onUpdate("item", first.megaStone);
+                          onUpdate("ability", first.ability);
                         } else {
                           onUpdate("megaForm", null);
+                          // メガシンカ解除時、元の特性に戻す
+                          if (pokemon.abilities[0]) onUpdate("ability", pokemon.abilities[0].slug);
                         }
                       }} className="rounded w-3.5 h-3.5" />
                     <span className="font-medium text-xs">メガシンカ</span>
@@ -4290,7 +4292,7 @@ function PokemonPanel({
                 <div className="ml-5">
                   <select value={megaForm ?? ""} onChange={(e) => {
                     const form = availableMegaForms.find((m) => m.slug === e.target.value);
-                    if (form) { onUpdate("megaForm", form.slug); onUpdate("item", form.megaStone); }
+                    if (form) { onUpdate("megaForm", form.slug); onUpdate("item", form.megaStone); onUpdate("ability", form.ability); }
                   }} className="w-full border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400">
                     {availableMegaForms.map((m) => <option key={m.slug} value={m.slug}>{m.jaName}</option>)}
                   </select>
@@ -4306,7 +4308,16 @@ function PokemonPanel({
             <StatEditor
               baseStats={pokemon.baseStats}
               level={level} nature={nature} ivs={ivs} evs={evs}
-              abilities={pokemon.abilities}
+              abilities={(() => {
+                // メガシンカ中は元特性ではなく、メガ形態の特性だけを選択肢にする
+                if (isMegaEvolved && megaForm) {
+                  const mega = availableMegaForms.find((m) => m.slug === megaForm);
+                  if (mega) {
+                    return [{ slug: mega.ability, isHidden: false, slot: 1 }];
+                  }
+                }
+                return pokemon.abilities;
+              })()}
               selectedAbility={ability} selectedItem={item} pokemonSlug={pokemon.name}
               statRanks={state.statRanks}
               onLevelChange={(v) => onUpdate("level", v)}
