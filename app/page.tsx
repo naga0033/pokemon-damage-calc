@@ -162,6 +162,19 @@ function computeMobileKoLabel(rolls: number[], hp: number): string {
   return "7発以上";
 }
 
+function getMobileBarColors(koLabel: string, exceedsHp = false): { solid: string; range: string; text: string } {
+  if (koLabel.startsWith("確定1発") || exceedsHp) {
+    return { solid: "bg-red-500", range: "bg-red-200", text: "text-red-600" };
+  }
+  if (koLabel.startsWith("乱数1発")) {
+    return { solid: "bg-orange-500", range: "bg-orange-200", text: "text-orange-600" };
+  }
+  if (koLabel.startsWith("確定2発") || koLabel.startsWith("乱数2発")) {
+    return { solid: "bg-yellow-400", range: "bg-yellow-200", text: "text-yellow-700" };
+  }
+  return { solid: "bg-orange-400", range: "bg-orange-200", text: "text-gray-700" };
+}
+
 const DEFAULT_STATE: PokemonState = {
   pokemon: null,
   level: 50,
@@ -3630,6 +3643,8 @@ export default function Home() {
     const displayKoLabel = damageResult.rolls.length > 0 && effectiveHp < damageResult.defenderHp
       ? computeMobileKoLabel(damageResult.rolls, effectiveHp)
       : damageResult.koLabel;
+    const exceedsHp = maxPercent > 100;
+    const barColors = getMobileBarColors(displayKoLabel, exceedsHp);
 
     return {
       displayKoLabel,
@@ -3643,6 +3658,7 @@ export default function Home() {
       hazardBarPct,
       poisonBarPct,
       remainBarPct,
+      barColors,
     };
   }, [damageResult, defenderStats, defenderCurrentHp, hazardInfo, defender.fieldConditions.leftovers, defender.item, poisonDmg]);
 
@@ -4220,7 +4236,7 @@ export default function Home() {
 
               <div className="min-w-0">
                 <div className="flex items-center justify-between text-[11px] font-semibold text-gray-700">
-                  <span>{mobileDamageSummary.displayKoLabel}</span>
+                  <span className={mobileDamageSummary.barColors.text}>{mobileDamageSummary.displayKoLabel}</span>
                   <span>{mobileDamageSummary.minDamage}〜{mobileDamageSummary.maxDamage}</span>
                 </div>
                 <div className="relative mt-1 h-4 overflow-hidden rounded-full bg-gray-200">
@@ -4248,7 +4264,7 @@ export default function Home() {
                   )}
                   {mobileDamageSummary.rangeBarPct > 0 && (
                     <div
-                      className="absolute top-0 h-full bg-orange-200 transition-all"
+                      className={`absolute top-0 h-full transition-all ${mobileDamageSummary.barColors.range}`}
                       style={{
                         left: `${Math.max(0, 100 - mobileDamageSummary.barMax)}%`,
                         width: `${mobileDamageSummary.rangeBarPct}%`,
@@ -4256,7 +4272,7 @@ export default function Home() {
                     />
                   )}
                   <div
-                    className="absolute right-0 top-0 h-full bg-orange-400 transition-all"
+                    className={`absolute right-0 top-0 h-full transition-all ${mobileDamageSummary.barColors.solid}`}
                     style={{ width: `${mobileDamageSummary.barMin}%` }}
                   />
                 </div>
