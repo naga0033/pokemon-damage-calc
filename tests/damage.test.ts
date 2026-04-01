@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { calcDamage, isGrounded } from "../lib/damage";
+import { getFlingPower } from "../lib/items";
 import type { MoveData, PokemonType } from "../lib/types";
 
 const baseMove = (overrides: Partial<MoveData> = {}): MoveData => ({
@@ -187,6 +188,19 @@ test("grounded helper handles balloon, flying type, levitate, iron ball, and ste
   assert.equal(isGrounded(["flying"], "", "iron-ball", null, false), true);
   assert.equal(isGrounded(["flying"], "", "", "stellar", true), false);
   assert.equal(isGrounded(["flying"], "", "", "ground", true), true);
+});
+
+test("fling power changes based on the held item", () => {
+  assert.equal(getFlingPower("sitrus-berry"), 10);
+  assert.equal(getFlingPower("life-orb"), 30);
+  assert.equal(getFlingPower("eviolite"), 40);
+  assert.equal(getFlingPower("sharp-beak"), 50);
+  assert.equal(getFlingPower("rocky-helmet"), 60);
+  assert.equal(getFlingPower("dragon-fang"), 70);
+  assert.equal(getFlingPower("weakness-policy"), 80);
+  assert.equal(getFlingPower("hard-stone"), 100);
+  assert.equal(getFlingPower("iron-ball"), 130);
+  assert.equal(getFlingPower(""), null);
 });
 
 test("freeze-dry becomes super effective against water", () => {

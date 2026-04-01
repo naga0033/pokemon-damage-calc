@@ -3,7 +3,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import type { PokemonState, PokemonData, MoveData, MoveCategory, StatKey, Nature, PokemonType, WeatherCondition, TerrainCondition, FieldConditions, EVIVs } from "@/lib/types";
 import { DEFAULT_FIELD } from "@/lib/types";
 import { DEFAULT_IVS, DEFAULT_EVS, calcAllStats, NATURE_DATA, STAT_NAMES_JA } from "@/lib/stats";
-import { ITEMS, ITEM_MAP } from "@/lib/items";
+import { ITEMS, ITEM_MAP, getFlingPower } from "@/lib/items";
 import { POPULAR_MOVE_SLUGS, MOVE_METADATA, SOUND_MOVES, POKEMON_MOVE_PRIORITY } from "@/lib/move-metadata";
 import { POKEMON_MOVE_USAGE } from "@/lib/move-usage";
 import { MOVE_NAMES_JA, getMoveJaName } from "@/lib/move-names";
@@ -3366,6 +3366,12 @@ export default function Home() {
    */
   const effectiveMove = useMemo((): MoveData | null => {
     if (!selectedMove) return null;
+    if (selectedMove.name === "fling") {
+      return {
+        ...selectedMove,
+        power: getFlingPower(attacker.item),
+      };
+    }
     if (selectedMove.name === "weather-ball") {
       let type: PokemonType = "normal";
       let power = 50;
