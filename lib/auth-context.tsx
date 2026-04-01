@@ -18,6 +18,18 @@ const AuthContext = createContext<AuthState>({
   signOut: async () => {},
 });
 
+function getAuthRedirectUrl() {
+  const userAgent = navigator.userAgent || "";
+  if (userAgent.includes("PokeDamageCalcApp")) {
+    return "pokedamagecalc://auth/callback";
+  }
+  const configuredUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (configuredUrl) {
+    return `${configuredUrl.replace(/\/+$/, "")}/auth/callback`;
+  }
+  return `${window.location.origin}/auth/callback`;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -42,7 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: window.location.origin,
+        emailRedirectTo: getAuthRedirectUrl(),
       },
     });
     return { error: error?.message ?? null };
