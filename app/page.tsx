@@ -4241,38 +4241,20 @@ export default function Home() {
                 </div>
                 <div className="relative mt-1 h-4 overflow-hidden rounded-full bg-gray-200">
                   <div
-                    className="absolute left-0 top-0 h-full bg-green-400 transition-all"
-                    style={{ width: `${mobileDamageSummary.remainBarPct}%` }}
+                    className={`absolute left-0 top-0 h-full opacity-85 transition-all ${mobileDamageSummary.barColors.range}`}
+                    style={{ width: `${mobileDamageSummary.barMax}%` }}
                   />
-                  {mobileDamageSummary.hazardBarPct > 0 && (
-                    <div
-                      className="absolute top-0 h-full bg-yellow-400 opacity-80 transition-all"
-                      style={{
-                        left: `${mobileDamageSummary.remainBarPct}%`,
-                        width: `${Math.min(mobileDamageSummary.hazardBarPct, 100)}%`,
-                      }}
-                    />
-                  )}
-                  {mobileDamageSummary.poisonBarPct > 0 && (
-                    <div
-                      className="absolute top-0 h-full bg-purple-400 opacity-80 transition-all"
-                      style={{
-                        left: `${mobileDamageSummary.remainBarPct + mobileDamageSummary.hazardBarPct}%`,
-                        width: `${Math.min(mobileDamageSummary.poisonBarPct, 100)}%`,
-                      }}
-                    />
-                  )}
                   {mobileDamageSummary.rangeBarPct > 0 && (
                     <div
                       className={`absolute top-0 h-full transition-all ${mobileDamageSummary.barColors.range}`}
                       style={{
-                        left: `${Math.max(0, 100 - mobileDamageSummary.barMax)}%`,
+                        left: `${mobileDamageSummary.barMin}%`,
                         width: `${mobileDamageSummary.rangeBarPct}%`,
                       }}
                     />
                   )}
                   <div
-                    className={`absolute right-0 top-0 h-full transition-all ${mobileDamageSummary.barColors.solid}`}
+                    className={`absolute left-0 top-0 h-full transition-all ${mobileDamageSummary.barColors.solid}`}
                     style={{ width: `${mobileDamageSummary.barMin}%` }}
                   />
                 </div>
