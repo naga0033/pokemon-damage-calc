@@ -2611,7 +2611,6 @@ function ReverseDamageSection({ rolls, defenderHp, minDamage, maxDamage, defende
   const [calcPopupPos, setCalcPopupPos] = useState<{ top: number; left: number } | null>(null);
   const [damageNumpadOpen, setDamageNumpadOpen] = useState(false);
   const [damageNumpadStr, setDamageNumpadStr] = useState("");
-  const [damageNumpadPos, setDamageNumpadPos] = useState<{ top: number; left: number } | null>(null);
   const calcButtonRef = useRef<HTMLButtonElement>(null);
   const damageInputRef = useRef<HTMLDivElement>(null);
   const damageKeyboardRef = useRef<HTMLInputElement>(null);
@@ -2638,13 +2637,10 @@ function ReverseDamageSection({ rolls, defenderHp, minDamage, maxDamage, defende
 
   const closeDamageNumpad = useCallback(() => {
     setDamageNumpadOpen(false);
-    setDamageNumpadPos(null);
   }, []);
 
   const openDamageNumpad = (e: React.MouseEvent<HTMLInputElement>) => {
     e.preventDefault();
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setDamageNumpadPos({ top: rect.top - 6, left: rect.left + rect.width / 2 });
     setDamageNumpadStr("");
     setDamageNumpadOpen(true);
     requestAnimationFrame(() => damageKeyboardRef.current?.focus());
@@ -2801,8 +2797,6 @@ function ReverseDamageSection({ rolls, defenderHp, minDamage, maxDamage, defende
               if (/^[0-9]$/.test(e.key)) {
                 e.preventDefault();
                 if (!damageNumpadOpen) {
-                  const rect = e.currentTarget.getBoundingClientRect();
-                  setDamageNumpadPos({ top: rect.top - 6, left: rect.left + rect.width / 2 });
                   setDamageNumpadOpen(true);
                   setDamageNumpadStr("");
                 }
@@ -2836,7 +2830,6 @@ function ReverseDamageSection({ rolls, defenderHp, minDamage, maxDamage, defende
                 onClear={() => { setDamageNumpadStr(""); setInput(""); }}
                 onMax={() => { setDamageNumpadStr("9999"); setInput("9999"); }}
                 onMin={() => { setDamageNumpadStr("1"); setInput("1"); }}
-                pos={damageNumpadPos ?? undefined}
                 placement="top"
                 onClose={closeDamageNumpad}
               />

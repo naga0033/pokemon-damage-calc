@@ -29,7 +29,9 @@ export function NumpadPopup({
     : {};
   const className = pos
     ? "bg-white border border-gray-300 rounded-xl shadow-2xl p-2.5 w-44"
-    : "absolute z-[200] bg-white border border-gray-300 rounded-xl shadow-2xl p-2.5 w-44 top-full mt-1 left-0";
+    : placement === "top"
+      ? "absolute z-[200] bg-white border border-gray-300 rounded-xl shadow-2xl p-2.5 w-44 bottom-full mb-2 left-1/2 -translate-x-1/2"
+      : "absolute z-[200] bg-white border border-gray-300 rounded-xl shadow-2xl p-2.5 w-44 top-full mt-1 left-0";
 
   return (
     <>
