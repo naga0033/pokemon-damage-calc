@@ -1,11 +1,11 @@
 "use client";
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, useId } from "react";
 import type React from "react";
 import type { BaseStats, EVIVs, Nature, StatKey } from "@/lib/types";
 import type { AbilityEntry } from "@/lib/types";
 import { NATURE_DATA, STAT_NAMES_JA, calcAllStats, calcHp, calcStat } from "@/lib/stats";
 import { getAbilityJaName } from "@/lib/ability-names";
-import { ITEMS, type ItemEntry } from "@/lib/items";
+import { ITEMS, ITEM_MAP, type ItemEntry } from "@/lib/items";
 import { POKEMON_ITEM_USAGE } from "@/lib/item-usage";
 import { NumpadPopup } from "@/components/NumpadPopup";
 
@@ -122,6 +122,9 @@ export default function StatEditor(props: Props) {
   const [activeTarget, setActiveTarget] = useState<NumpadTarget | null>(null);
   const [numpadStr, setNumpadStr] = useState("");
   const [numpadPos, setNumpadPos] = useState<{ top: number; left: number } | null>(null);
+  const [itemQuery, setItemQuery] = useState(selectedItem ? (ITEM_MAP[selectedItem]?.ja ?? "") : "");
+  const [itemMenuOpen, setItemMenuOpen] = useState(false);
+  const itemInputId = useId();
 
   // スマホ/PC出し分けはCSSクラス(md:hidden / hidden md:block)で行う
 
@@ -214,6 +217,39 @@ export default function StatEditor(props: Props) {
   };
 
   const hasAnyRank = Object.values(statRanks).some((r) => r !== 0);
+  const filteredItems = useMemo(() => {
+    const query = itemQuery.trim().toLowerCase();
+    if (!query) return sortedItems;
+    return sortedItems.filter((item) =>
+      item.ja.toLowerCase().includes(query) || item.slug.toLowerCase().includes(query)
+    );
+  }, [itemQuery, sortedItems]);
+
+  useEffect(() => {
+    setItemQuery(selectedItem ? (ITEM_MAP[selectedItem]?.ja ?? "") : "");
+  }, [selectedItem]);
+
+  const selectItem = useCallback((slug: string) => {
+    onItemChange(slug);
+    setItemQuery(slug ? (ITEM_MAP[slug]?.ja ?? "") : "");
+    setItemMenuOpen(false);
+  }, [onItemChange]);
+
+  const handleItemInputChange = useCallback((value: string) => {
+    setItemQuery(value);
+    setItemMenuOpen(true);
+
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) {
+      onItemChange("");
+      return;
+    }
+
+    const exact = sortedItems.find((item) =>
+      item.ja.toLowerCase() === normalized || item.slug.toLowerCase() === normalized
+    );
+    if (exact) onItemChange(exact.slug);
+  }, [onItemChange, sortedItems]);
 
   return (
     <div className="space-y-1" ref={containerRef}>
@@ -229,7 +265,7 @@ export default function StatEditor(props: Props) {
           </select>
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1">
+          <div className="relative flex items-center gap-1">
             {selectedItem && (
               <img
                 src={`https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/${selectedItem}.png`}
@@ -238,12 +274,39 @@ export default function StatEditor(props: Props) {
                 onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
               />
             )}
-            <select value={selectedItem} onChange={(e) => onItemChange(e.target.value)}
-              className="flex-1 min-w-0 border border-gray-300 rounded px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400">
-              {sortedItems.map((item) => (
-                <option key={item.slug} value={item.slug}>{item.ja}</option>
-              ))}
-            </select>
+            <input
+              id={itemInputId}
+              type="text"
+              value={itemQuery}
+              placeholder="もちものを検索"
+              autoComplete="off"
+              onFocus={() => setItemMenuOpen(true)}
+              onChange={(e) => handleItemInputChange(e.target.value)}
+              onBlur={() => window.setTimeout(() => setItemMenuOpen(false), 120)}
+              className="flex-1 min-w-0 border border-gray-300 rounded px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+            />
+            {itemMenuOpen && (
+              <div className="absolute left-0 right-0 top-full z-30 mt-1 max-h-56 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg">
+                {filteredItems.length > 0 ? filteredItems.map((item) => (
+                  <button
+                    key={item.slug || "none"}
+                    type="button"
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      selectItem(item.slug);
+                    }}
+                    className={`flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-xs hover:bg-blue-50 ${
+                      selectedItem === item.slug ? "bg-blue-50 text-blue-700" : "text-gray-700"
+                    }`}
+                  >
+                    <span className="truncate">{item.ja}</span>
+                    {item.slug === "" && <span className="shrink-0 text-[10px] text-gray-400">なし</span>}
+                  </button>
+                )) : (
+                  <div className="px-2 py-2 text-xs text-gray-400">一致するもちものがありません</div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
