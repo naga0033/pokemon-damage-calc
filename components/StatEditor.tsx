@@ -131,6 +131,7 @@ export default function StatEditor(props: Props) {
   const latestRef = useRef({ activeTarget, numpadStr, totalEv, evs, baseStats, level, nature });
   latestRef.current = { activeTarget, numpadStr, totalEv, evs, baseStats, level, nature };
   const containerRef = useRef<HTMLDivElement>(null);
+  const itemInputRef = useRef<HTMLInputElement>(null);
 
   const applyAndClose = useCallback(() => {
     const { activeTarget, numpadStr, totalEv, evs, baseStats, level, nature } = latestRef.current;
@@ -251,6 +252,19 @@ export default function StatEditor(props: Props) {
     if (exact) onItemChange(exact.slug);
   }, [onItemChange, sortedItems]);
 
+  const handleItemInputFocus = useCallback(() => {
+    setItemMenuOpen(true);
+    itemInputRef.current?.select();
+  }, []);
+
+  const handleItemInputClick = useCallback(() => {
+    setItemMenuOpen(true);
+    const selectedLabel = ITEM_MAP[selectedItem]?.ja ?? "";
+    if (!selectedLabel || itemQuery !== selectedLabel) return;
+    setItemQuery("");
+    onItemChange("");
+  }, [itemQuery, onItemChange, selectedItem]);
+
   return (
     <div className="space-y-1" ref={containerRef}>
       {/* 特性・持ち物（コンパクト） */}
@@ -275,12 +289,14 @@ export default function StatEditor(props: Props) {
               />
             )}
             <input
+              ref={itemInputRef}
               id={itemInputId}
               type="text"
               value={itemQuery}
               placeholder="もちものを検索"
               autoComplete="off"
-              onFocus={() => setItemMenuOpen(true)}
+              onFocus={handleItemInputFocus}
+              onClick={handleItemInputClick}
               onChange={(e) => handleItemInputChange(e.target.value)}
               onBlur={() => window.setTimeout(() => setItemMenuOpen(false), 120)}
               className="flex-1 min-w-0 border border-gray-300 rounded px-1.5 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
