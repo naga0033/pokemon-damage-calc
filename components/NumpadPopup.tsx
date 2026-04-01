@@ -2,7 +2,7 @@
 import type React from "react";
 
 export function NumpadPopup({
-  value, maxLabel, minLabel, onDigit, onClear, onMax, onMin, pos, onClose,
+  value, maxLabel, minLabel, onDigit, onClear, onMax, onMin, pos, onClose, placement = "bottom",
 }: {
   value: string;
   maxLabel: string;
@@ -13,12 +13,19 @@ export function NumpadPopup({
   onMin: () => void;
   pos?: { top: number; left: number };
   onClose?: () => void;
+  placement?: "top" | "bottom";
 }) {
   const base = "flex items-center justify-center rounded-lg border font-semibold text-sm transition-colors select-none h-9 cursor-pointer";
   const md = (fn: () => void) => (e: React.MouseEvent) => { e.preventDefault(); e.stopPropagation(); fn(); };
 
   const style: React.CSSProperties = pos
-    ? { position: "fixed", top: pos.top, left: pos.left, transform: "translateX(-50%)", zIndex: 9999 }
+    ? {
+        position: "fixed",
+        top: pos.top,
+        left: pos.left,
+        transform: placement === "top" ? "translate(-50%, -100%)" : "translateX(-50%)",
+        zIndex: 9999,
+      }
     : {};
   const className = pos
     ? "bg-white border border-gray-300 rounded-xl shadow-2xl p-2.5 w-44"
