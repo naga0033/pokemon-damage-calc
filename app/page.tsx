@@ -2702,8 +2702,43 @@ function ReverseDamageSection({ rolls, defenderHp, minDamage, maxDamage, defende
         {/* 背景オーバーレイ: 電卓の外をタップで閉じる */}
         <div className="fixed inset-0 z-40" onClick={() => setCalcOpen(false)} />
         <div
-          className="fixed bottom-4 left-1/2 z-[70] w-[min(20rem,calc(100vw-1.5rem))] -translate-x-1/2 bg-white border border-gray-300 rounded-xl shadow-2xl p-2.5 space-y-1.5 md:w-52 md:-translate-x-full md:-translate-y-full"
-          style={calcPopupPos ? { top: calcPopupPos.top, left: calcPopupPos.left, bottom: "auto" } : undefined}
+          className="fixed bottom-4 left-1/2 z-[70] w-[min(20rem,calc(100vw-1.5rem))] -translate-x-1/2 bg-white border border-gray-300 rounded-xl shadow-2xl p-2.5 space-y-1.5 md:hidden"
+        >
+          <div className="text-right text-sm font-mono bg-white border border-gray-200 rounded px-2 py-1 min-h-[1.8rem] text-gray-800">
+            {calcExpr || <span className="text-gray-300">0</span>}
+          </div>
+          <div className="grid grid-cols-4 gap-1">
+            {["7","8","9","+","4","5","6","-","1","2","3","×","0","C","=","÷"].map((k) => (
+              <button key={k}
+                className={`text-sm font-bold rounded py-1.5 transition-colors ${
+                  ["+","-","×","÷"].includes(k) ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                  : k === "=" ? "bg-green-500 text-white hover:bg-green-600"
+                  : k === "C" ? "bg-red-100 text-red-600 hover:bg-red-200"
+                  : "bg-white border border-gray-200 text-gray-700 hover:bg-gray-100"
+                }`}
+                onClick={() => {
+                  if (k === "C") { setCalcExpr(""); }
+                  else if (k === "=") {
+                    try {
+                      const expr = calcExpr.replace(/×/g, "*").replace(/÷/g, "/");
+                      const result = Math.round(Function('"use strict"; return (' + expr + ')')());
+                      if (Number.isFinite(result)) {
+                        setInput(String(Math.abs(result)));
+                        setCalcExpr("");
+                        setCalcOpen(false);
+                      }
+                    } catch { /* 不正な式は無視 */ }
+                  }
+                  else { setCalcExpr((p) => p + k); }
+                }}
+              >{k}</button>
+            ))}
+          </div>
+          <p className="text-[9px] text-gray-400 text-center">＝を押すと結果がダメージ欄に入ります</p>
+        </div>
+        <div
+          className="hidden md:block fixed z-[70] w-52 -translate-x-full -translate-y-full bg-white border border-gray-300 rounded-xl shadow-2xl p-2.5 space-y-1.5"
+          style={calcPopupPos ? { top: calcPopupPos.top, left: calcPopupPos.left } : undefined}
         >
           <div className="text-right text-sm font-mono bg-white border border-gray-200 rounded px-2 py-1 min-h-[1.8rem] text-gray-800">
             {calcExpr || <span className="text-gray-300">0</span>}
