@@ -4553,39 +4553,6 @@ function PokemonPanel({
               })()}
             </div>
 
-            {showMoveSelector && onMoveSelect && (
-              <div className="border-b pb-3">
-                <MoveSelector
-                  moveNames={pokemon.moveNames}
-                  pokemonSlug={pokemon.name}
-                  pokemonTypes={pokemon.types}
-                  registeredMoves={registeredMoves}
-                  selectedMove={selectedMove ?? null}
-                  onMoveSelect={onMoveSelect}
-                  isCritical={isCritical ?? false}
-                  onCriticalChange={onCriticalChange ?? (() => {})}
-                  hitCount={hitCount ?? 1}
-                  onHitCountChange={onHitCountChange ?? (() => {})}
-                  critCount={critCount ?? 0}
-                  onCritCountChange={onCritCountChange ?? (() => {})}
-                  attackerAbility={ability}
-                  attackerItem={item}
-                  isBurned={isBurned}
-                  onBurnedChange={(v) => onUpdate("isBurned", v)}
-                  isCharged={isCharged}
-                  onChargedChange={(v) => onUpdate("isCharged", v)}
-                  weather={weather ?? "none"}
-                  onWeatherChange={onWeatherChange ?? (() => {})}
-                  terrain={terrain ?? "none"}
-                  onTerrainChange={onTerrainChange ?? (() => {})}
-                  attackerWeight={attackerWeight}
-                  defenderWeight={defenderWeight}
-                  isPaybackDoubled={panelPaybackDoubled}
-                  onPaybackDoubledChange={onPaybackDoubledChange}
-                />
-              </div>
-            )}
-
             {/* フォームスイッチ: テラスタル / ダイマックス / メガシンカ */}
             <div className="space-y-1.5">
               <div className="flex items-center gap-3 text-sm flex-wrap">
@@ -4663,6 +4630,39 @@ function PokemonPanel({
                 </p>
               )}
             </div>
+
+            {showMoveSelector && onMoveSelect && (
+              <div className="border-b pb-3">
+                <MoveSelector
+                  moveNames={pokemon.moveNames}
+                  pokemonSlug={pokemon.name}
+                  pokemonTypes={pokemon.types}
+                  registeredMoves={registeredMoves}
+                  selectedMove={selectedMove ?? null}
+                  onMoveSelect={onMoveSelect}
+                  isCritical={isCritical ?? false}
+                  onCriticalChange={onCriticalChange ?? (() => {})}
+                  hitCount={hitCount ?? 1}
+                  onHitCountChange={onHitCountChange ?? (() => {})}
+                  critCount={critCount ?? 0}
+                  onCritCountChange={onCritCountChange ?? (() => {})}
+                  attackerAbility={ability}
+                  attackerItem={item}
+                  isBurned={isBurned}
+                  onBurnedChange={(v) => onUpdate("isBurned", v)}
+                  isCharged={isCharged}
+                  onChargedChange={(v) => onUpdate("isCharged", v)}
+                  weather={weather ?? "none"}
+                  onWeatherChange={onWeatherChange ?? (() => {})}
+                  terrain={terrain ?? "none"}
+                  onTerrainChange={onTerrainChange ?? (() => {})}
+                  attackerWeight={attackerWeight}
+                  defenderWeight={defenderWeight}
+                  isPaybackDoubled={panelPaybackDoubled}
+                  onPaybackDoubledChange={onPaybackDoubledChange}
+                />
+              </div>
+            )}
 
             <StatEditor
               baseStats={pokemon.baseStats}
