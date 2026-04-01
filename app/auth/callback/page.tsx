@@ -7,9 +7,22 @@ export default function AuthCallbackPage() {
   const router = useRouter();
 
   useEffect(() => {
+    const customSchemeUrl = (() => {
+      const deepLink = new URL("pokedamagecalc://auth/callback");
+      deepLink.search = window.location.search;
+      deepLink.hash = window.location.hash;
+      return deepLink.toString();
+    })();
+
+    const isInAppWebView = (navigator.userAgent || "").includes("PokeDamageCalcApp");
+
+    if (!isInAppWebView) {
+      window.location.replace(customSchemeUrl);
+    }
+
     const timeoutId = window.setTimeout(() => {
       router.replace("/");
-    }, 1200);
+    }, isInAppWebView ? 1200 : 2500);
 
     return () => window.clearTimeout(timeoutId);
   }, [router]);
@@ -24,6 +37,19 @@ export default function AuthCallbackPage() {
         <p className="mt-3 text-sm leading-6 text-gray-500">
           このままアプリへ戻ります。
         </p>
+        <a
+          href="#"
+          onClick={(event) => {
+            event.preventDefault();
+            const deepLink = new URL("pokedamagecalc://auth/callback");
+            deepLink.search = window.location.search;
+            deepLink.hash = window.location.hash;
+            window.location.href = deepLink.toString();
+          }}
+          className="mt-5 inline-flex rounded-full border border-red-200 px-4 py-2 text-sm font-semibold text-red-600"
+        >
+          アプリに戻る
+        </a>
       </div>
     </main>
   );
