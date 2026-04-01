@@ -163,16 +163,24 @@ function computeMobileKoLabel(rolls: number[], hp: number): string {
 }
 
 function getMobileBarColors(koLabel: string, exceedsHp = false): { solid: string; range: string; text: string } {
-  if (koLabel.startsWith("確定1発") || exceedsHp) {
+  if (koLabel.startsWith("確定1発")) {
     return { solid: "bg-red-500", range: "bg-red-200", text: "text-red-600" };
   }
   if (koLabel.startsWith("乱数1発")) {
     return { solid: "bg-orange-500", range: "bg-orange-200", text: "text-orange-600" };
   }
   if (koLabel.startsWith("確定2発") || koLabel.startsWith("乱数2発")) {
-    return { solid: "bg-yellow-400", range: "bg-yellow-200", text: "text-yellow-700" };
+    return {
+      solid: exceedsHp ? "bg-red-500" : "bg-orange-400",
+      range: "bg-orange-200",
+      text: "text-yellow-700",
+    };
   }
-  return { solid: "bg-orange-400", range: "bg-orange-200", text: "text-gray-700" };
+  return {
+    solid: exceedsHp ? "bg-red-500" : "bg-orange-400",
+    range: "bg-orange-200",
+    text: "text-gray-700",
+  };
 }
 
 const DEFAULT_STATE: PokemonState = {
@@ -4241,20 +4249,38 @@ export default function Home() {
                 </div>
                 <div className="relative mt-1 h-4 overflow-hidden rounded-full bg-gray-200">
                   <div
-                    className={`absolute left-0 top-0 h-full opacity-85 transition-all ${mobileDamageSummary.barColors.range}`}
-                    style={{ width: `${mobileDamageSummary.barMax}%` }}
+                    className="absolute left-0 top-0 h-full bg-green-400 transition-all"
+                    style={{ width: `${mobileDamageSummary.remainBarPct}%` }}
                   />
+                  {mobileDamageSummary.hazardBarPct > 0 && (
+                    <div
+                      className="absolute top-0 h-full bg-yellow-400 opacity-80 transition-all"
+                      style={{
+                        left: `${mobileDamageSummary.remainBarPct}%`,
+                        width: `${Math.min(mobileDamageSummary.hazardBarPct, 100)}%`,
+                      }}
+                    />
+                  )}
+                  {mobileDamageSummary.poisonBarPct > 0 && (
+                    <div
+                      className="absolute top-0 h-full bg-purple-400 opacity-80 transition-all"
+                      style={{
+                        left: `${mobileDamageSummary.remainBarPct + mobileDamageSummary.hazardBarPct}%`,
+                        width: `${Math.min(mobileDamageSummary.poisonBarPct, 100)}%`,
+                      }}
+                    />
+                  )}
                   {mobileDamageSummary.rangeBarPct > 0 && (
                     <div
                       className={`absolute top-0 h-full transition-all ${mobileDamageSummary.barColors.range}`}
                       style={{
-                        left: `${mobileDamageSummary.barMin}%`,
+                        left: `${Math.max(0, 100 - mobileDamageSummary.barMax)}%`,
                         width: `${mobileDamageSummary.rangeBarPct}%`,
                       }}
                     />
                   )}
                   <div
-                    className={`absolute left-0 top-0 h-full transition-all ${mobileDamageSummary.barColors.solid}`}
+                    className={`absolute right-0 top-0 h-full transition-all ${mobileDamageSummary.barColors.solid}`}
                     style={{ width: `${mobileDamageSummary.barMin}%` }}
                   />
                 </div>
