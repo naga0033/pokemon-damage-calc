@@ -2608,14 +2608,23 @@ function ReverseDamageSection({ rolls, defenderHp, minDamage, maxDamage, defende
   const [input, setInput] = useState("");
   const [calcOpen, setCalcOpen] = useState(false);
   const [calcExpr, setCalcExpr] = useState("");
+  const [calcPopupPos, setCalcPopupPos] = useState<{ top: number; left: number } | null>(null);
   const [damageNumpadOpen, setDamageNumpadOpen] = useState(false);
   const [damageNumpadStr, setDamageNumpadStr] = useState("");
   const [damageNumpadPos, setDamageNumpadPos] = useState<{ top: number; left: number } | null>(null);
+  const calcButtonRef = useRef<HTMLButtonElement>(null);
   const damageInputRef = useRef<HTMLDivElement>(null);
   const damageKeyboardRef = useRef<HTMLInputElement>(null);
   const num = parseInt(input, 10);
   const boosts = useMemo(() => (Number.isFinite(num) && num > 0 ? inferBoosts(num, rolls) : []), [num, rolls]);
   const pct = Number.isFinite(num) && num > 0 ? `${Math.round((num / defenderHp) * 1000) / 10}%` : null;
+
+  const updateCalcPopupPos = useCallback(() => {
+    const button = calcButtonRef.current;
+    if (!button) return;
+    const rect = button.getBoundingClientRect();
+    setCalcPopupPos({ top: rect.top - 8, left: rect.right });
+  }, []);
 
   // ダメージ数値は inputMode=numeric で携帯のテンキーのみ（アプリ内テンキーは使わない）
   const onDamageInputChange = (raw: string) => {
@@ -2662,21 +2671,40 @@ function ReverseDamageSection({ rolls, defenderHp, minDamage, maxDamage, defende
     return () => document.removeEventListener("mousedown", handler);
   }, [damageNumpadOpen, closeDamageNumpad]);
 
+  useEffect(() => {
+    if (!calcOpen) return;
+    updateCalcPopupPos();
+    const handleViewportChange = () => updateCalcPopupPos();
+    window.addEventListener("resize", handleViewportChange);
+    window.addEventListener("scroll", handleViewportChange, true);
+    return () => {
+      window.removeEventListener("resize", handleViewportChange);
+      window.removeEventListener("scroll", handleViewportChange, true);
+    };
+  }, [calcOpen, updateCalcPopupPos]);
+
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 space-y-2">
       <div className="flex items-center justify-between">
         <p className="text-xs font-bold text-gray-700">受けたダメージから相手の型を予測</p>
         <button
-          onClick={() => setCalcOpen(!calcOpen)}
+          ref={calcButtonRef}
+          onClick={() => {
+            if (!calcOpen) updateCalcPopupPos();
+            setCalcOpen(!calcOpen);
+          }}
           className={`text-[10px] px-2 py-0.5 rounded-md border font-medium transition-colors ${calcOpen ? "bg-gray-700 text-white border-gray-700" : "bg-white text-gray-500 border-gray-300 hover:bg-gray-50"}`}
         >🧮 電卓</button>
       </div>
-      {/* 簡易電卓（スマホでは画面下、PCではボタン下に展開） */}
+      {/* 簡易電卓（スマホでは画面下、PCではボタン上に固定表示） */}
       {calcOpen && (
         <div className="relative">
         {/* 背景オーバーレイ: 電卓の外をタップで閉じる */}
         <div className="fixed inset-0 z-40" onClick={() => setCalcOpen(false)} />
-        <div className="fixed bottom-4 left-1/2 z-50 w-[min(20rem,calc(100vw-1.5rem))] -translate-x-1/2 bg-white border border-gray-300 rounded-xl shadow-2xl p-2.5 space-y-1.5 md:absolute md:bottom-auto md:top-full md:right-0 md:left-auto md:w-52 md:translate-x-0">
+        <div
+          className="fixed bottom-4 left-1/2 z-[70] w-[min(20rem,calc(100vw-1.5rem))] -translate-x-1/2 bg-white border border-gray-300 rounded-xl shadow-2xl p-2.5 space-y-1.5 md:w-52 md:-translate-x-full md:-translate-y-full"
+          style={calcPopupPos ? { top: calcPopupPos.top, left: calcPopupPos.left, bottom: "auto" } : undefined}
+        >
           <div className="text-right text-sm font-mono bg-white border border-gray-200 rounded px-2 py-1 min-h-[1.8rem] text-gray-800">
             {calcExpr || <span className="text-gray-300">0</span>}
           </div>
