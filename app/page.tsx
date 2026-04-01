@@ -3415,21 +3415,21 @@ export default function Home() {
   }, [defender]);
 
   /**
-   * テラバースト専用: テラスタル中にタイプ・分類・威力を動的に解決する
-   * - タイプ   → 攻撃側のテラスタイプ
-   * - 物理/特殊 → ランク補正 + 特性補正を加味した「攻撃 vs 特攻」の高い方
-   * - 威力     → 80（テラスタル時固定）
-   * テラスタルしていない・テラバースト以外の場合は selectedMove をそのまま返す
+   * 動的に変化する技を解決
+   * - なげつける: 持ち物に応じて威力変化
+   * - ウェザーボール: 天候でタイプ/威力変化
+   * - ツタこんぼう: オーガポンの面に応じてタイプ変化
+   * - テラバースト: テラスタル中にタイプ/分類/威力変化
    */
-  const effectiveMove = useMemo((): MoveData | null => {
-    if (!selectedMove) return null;
-    if (selectedMove.name === "fling") {
+  const resolveDynamicMove = useCallback((move: MoveData | null): MoveData | null => {
+    if (!move) return null;
+    if (move.name === "fling") {
       return {
-        ...selectedMove,
+        ...move,
         power: getFlingPower(attacker.item),
       };
     }
-    if (selectedMove.name === "weather-ball") {
+    if (move.name === "weather-ball") {
       let type: PokemonType = "normal";
       let power = 50;
       if (weather === "sun") { type = "fire"; power = 100; }
@@ -3437,15 +3437,29 @@ export default function Home() {
       else if (weather === "sand") { type = "rock"; power = 100; }
       else if (weather === "snow") { type = "ice"; power = 100; }
       return {
-        ...selectedMove,
+        ...move,
         type,
         power,
-        japaneseName: weather === "none" ? selectedMove.japaneseName : `${selectedMove.japaneseName}(${TYPE_NAMES_JA[type]})`,
+        japaneseName: weather === "none" ? move.japaneseName : `${move.japaneseName}(${TYPE_NAMES_JA[type]})`,
       };
     }
-    if (selectedMove.name !== "tera-blast") return selectedMove;
-    if (!attacker.isTerastallized || !attacker.teraType) return selectedMove;
-    if (!attackerStats) return selectedMove;
+    if (move.name === "ivy-cudgel") {
+      const ivyCudgelTypeMap: Partial<Record<string, PokemonType>> = {
+        "ogerpon-wellspring": "water",
+        "ogerpon-hearthflame": "fire",
+        "ogerpon-cornerstone": "rock",
+      };
+      const type = attacker.pokemon ? ivyCudgelTypeMap[attacker.pokemon.name] : undefined;
+      if (!type) return move;
+      return {
+        ...move,
+        type,
+        japaneseName: `${move.japaneseName}(${TYPE_NAMES_JA[type]})`,
+      };
+    }
+    if (move.name !== "tera-blast") return move;
+    if (!attacker.isTerastallized || !attacker.teraType) return move;
+    if (!attackerStats) return move;
 
     // ランク補正係数
     const rm = (rank: number) => rank >= 0 ? (2 + rank) / 2 : 2 / (2 - rank);
@@ -3470,12 +3484,15 @@ export default function Home() {
     const category: MoveCategory = atkEff > spAtkEff ? "physical" : "special";
 
     return {
-      ...selectedMove,
+      ...move,
       type:     attacker.teraType,
       category,
       power:    80,
     } satisfies MoveData;
-  }, [selectedMove, attacker, attackerStats, weather, terrain]);
+  }, [attacker, attackerStats, weather, terrain]);
+
+  const effectiveMove = useMemo((): MoveData | null => resolveDynamicMove(selectedMove), [selectedMove, resolveDynamicMove]);
+  const effectiveMove2 = useMemo((): MoveData | null => resolveDynamicMove(selectedMove2), [selectedMove2, resolveDynamicMove]);
 
   // ダイマックス技変換
   const dynamaxEffectiveMove = useMemo((): MoveData | null => {
@@ -3617,19 +3634,19 @@ export default function Home() {
 
   // 2回目の攻撃のダメージ計算
   const damageResult2 = useMemo(() => {
-    if (!showSecondAttack || !selectedMove2 || !attacker.pokemon || !defender.pokemon || !attackerStats || !defenderStats) return null;
-    const isWeightMove2 = ["heavy-slam", "heat-crash", "grass-knot", "low-kick"].includes(selectedMove2.name);
-    if (!selectedMove2.power && !isWeightMove2) return null;
+    if (!showSecondAttack || !effectiveMove2 || !attacker.pokemon || !defender.pokemon || !attackerStats || !defenderStats) return null;
+    const isWeightMove2 = ["heavy-slam", "heat-crash", "grass-knot", "low-kick"].includes(effectiveMove2.name);
+    if (!effectiveMove2.power && !isWeightMove2) return null;
     const useStats = megaAttackerStats ?? attackerStats;
-    const category = selectedMove2.category;
-    const meta2 = MOVE_METADATA[selectedMove2.name];
+    const category = effectiveMove2.category;
+    const meta2 = MOVE_METADATA[effectiveMove2.name];
     let atkStat: number;
     let atkRank: number;
     if (meta2?.statOverride === "body-press") { atkStat = useStats.defense; atkRank = attacker.statRanks.defense; }
     else if (meta2?.statOverride === "foul-play") { atkStat = defenderStats.attack; atkRank = defender.statRanks.attack; }
     else { atkStat = category === "special" ? useStats.spAtk : useStats.attack; atkRank = attacker.statRanks[category === "special" ? "spAtk" : "attack"]; }
     return calcDamage({
-      attackerLevel: attacker.level, move: selectedMove2,
+      attackerLevel: attacker.level, move: effectiveMove2,
       attackStat: atkStat,
       defenseStat: meta2?.defenseStatOverride === "defense" ? defenderStats.defense : category === "special" ? defenderStats.spDef : defenderStats.defense,
       defenderHp: defenderStats.hp, attackerTypes: attacker.pokemon.types, defenderTypes: defender.pokemon.types,
@@ -3656,7 +3673,7 @@ export default function Home() {
       gravity,
       supremeOverlordFaintedAllies,
     });
-  }, [showSecondAttack, selectedMove2, attacker, defender, attackerStats, megaAttackerStats, defenderStats, isCritical2, weather, terrain, hitCount2, critCount2, isDoubles, helpingHand, steelworker, powerSpot, flowerGift, defenderFlowerGift, friendGuard, gravity, supremeOverlordFaintedAllies]);
+  }, [showSecondAttack, effectiveMove2, attacker, defender, attackerStats, megaAttackerStats, defenderStats, isCritical2, weather, terrain, hitCount2, critCount2, isDoubles, helpingHand, steelworker, powerSpot, flowerGift, defenderFlowerGift, friendGuard, gravity, supremeOverlordFaintedAllies]);
 
   // ステルスロック・まきびしダメージの計算
   const hazardInfo = useMemo(() => {
@@ -3696,7 +3713,7 @@ export default function Home() {
 
     const effectiveHp = (defenderCurrentHp != null && defenderCurrentHp >= 1) ? defenderCurrentHp : defenderStats.hp;
     const totalHazardDmg = (hazardInfo?.stealthRockHp ?? 0) + (hazardInfo?.disguiseHp ?? 0) + (hazardInfo?.spikesHp ?? 0);
-    const leftoversRecovery = defender.fieldConditions.leftovers || defender.item === "leftovers" || defender.item === "black-sludge"
+    const leftoversRecovery = defender.fieldConditions.leftovers
       ? Math.floor(damageResult.defenderHp / 16)
       : 0;
     const minDamage = Math.max(0, damageResult.minDamage - leftoversRecovery);
@@ -3731,7 +3748,7 @@ export default function Home() {
       remainBarPct,
       barColors,
     };
-  }, [damageResult, defenderStats, defenderCurrentHp, hazardInfo, defender.fieldConditions.leftovers, defender.item, poisonDmg]);
+  }, [damageResult, defenderStats, defenderCurrentHp, hazardInfo, defender.fieldConditions.leftovers, poisonDmg]);
 
   // Escキーでモーダルを閉じる
   useEffect(() => {
@@ -4140,10 +4157,10 @@ export default function Home() {
             />
 
             {/* 2回目の攻撃結果（1回目のダメージ後の残HPで計算） */}
-            {showSecondAttack && damageResult2 && selectedMove2 && damageResult && (
+            {showSecondAttack && damageResult2 && effectiveMove2 && damageResult && (
               <div className="mt-2">
                 <h2 className="font-semibold text-gray-700 text-sm px-1">
-                  2回目 — {attacker.pokemon?.japaneseName} の {selectedMove2.japaneseName}
+                  2回目 — {attacker.pokemon?.japaneseName} の {effectiveMove2.japaneseName}
                   <span className="text-xs font-normal text-gray-400 ml-1">（1回目ダメージ後）</span>
                 </h2>
                 <DamageResultPanel

@@ -148,7 +148,7 @@ export default function DamageResultPanel({ result, stealthRockHp, disguiseHp, s
   const { minDamage: rawMinDamage, maxDamage: rawMaxDamage, koLabel, typeEffectiveness, defenderHp, rolls } = result;
   const activeModifiers = (result.modifiers ?? []).filter((modifier) => modifier.value !== 1);
   // たべのこし回復量（ON時のみ）
-  const isLeftoversActive = hasLeftovers || defenderItem === "leftovers" || defenderItem === "black-sludge";
+  const isLeftoversActive = !!hasLeftovers;
   const leftoversRecovery = isLeftoversActive ? Math.floor(defenderHp / 16) : 0;
   // 実効ダメージ（回復分を差し引き、最低0）
   const minDamage = Math.max(0, rawMinDamage - leftoversRecovery);
@@ -204,11 +204,10 @@ export default function DamageResultPanel({ result, stealthRockHp, disguiseHp, s
   const leftoversKoLabel = useMemo(
     () => {
       if (!rolls || rolls.length === 0) return null;
-      const isLeftovers = hasLeftovers || defenderItem === "leftovers" || defenderItem === "black-sludge";
-      if (!isLeftovers) return null;
+      if (!hasLeftovers) return null;
       return getKoLabelWithLeftovers(rolls, effectiveHp);
     },
-    [rolls, effectiveHp, defenderItem, hasLeftovers]
+    [rolls, effectiveHp, hasLeftovers]
   );
 
   const receivedNum = parseInt(receivedInput, 10);

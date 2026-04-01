@@ -252,6 +252,9 @@ const FORM_JAPANESE_NAMES: Record<string, string> = {
  */
 const POKEMON_FETCH_SLUG_OVERRIDES: Record<string, string> = {
   mimikyu: "mimikyu-disguised",
+  "ogerpon-wellspring": "ogerpon-wellspring-mask",
+  "ogerpon-hearthflame": "ogerpon-hearthflame-mask",
+  "ogerpon-cornerstone": "ogerpon-cornerstone-mask",
 };
 
 /** PokeAPIのタイプ名 → アプリ内タイプ名変換 */
