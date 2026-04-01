@@ -181,6 +181,7 @@ export default function DamageResultPanel({ result, stealthRockHp, disguiseHp, s
   // バー表示用（100%にクランプ）
   const barMin = Math.min(rawBarMin, 100);
   const barMax = Math.min(rawBarMax, 100);
+  const rangeBarPct = Math.max(0, barMax - barMin);
   // 100%超えフラグ
   const exceedsHp = rawBarMax > 100;
   // 設置技のバー幅（設置技は最大HPベースで計算されるため defenderHp を使用）
@@ -191,6 +192,7 @@ export default function DamageResultPanel({ result, stealthRockHp, disguiseHp, s
   const leftoversBarPct = leftoversRecovery > 0 ? Math.min((leftoversRecovery / effectiveHp) * 100, 100) : 0;
   // 毒ダメージのバー幅
   const poisonBarPct = poisonDmg > 0 ? Math.min((poisonDmg / effectiveHp) * 100, 100) : 0;
+  const remainBarPct = Math.max(0, 100 - barMax - hazardBarPct - poisonBarPct);
   // 毒込みKOラベル
   const totalSlipDmg = totalHazardDmg + poisonDmg;
   const slipKoLabel = useMemo(
@@ -335,38 +337,18 @@ export default function DamageResultPanel({ result, stealthRockHp, disguiseHp, s
             {/* ダメージバー */}
             <div>
               <div className="relative h-6 bg-gray-100 rounded-full overflow-hidden">
-                {/* ダメージ範囲・最大（右端から、薄いオレンジ） */}
-                <div
-                  className="absolute right-0 top-0 h-full bg-orange-200 transition-all"
-                  style={{ width: `${barMax}%` }}
-                />
-                {/* ダメージ範囲・最小（右端から、濃いオレンジ or 100%超え時は赤） */}
-                <div
-                  className={`absolute right-0 top-0 h-full transition-all ${exceedsHp ? "bg-red-500" : "bg-orange-400"}`}
-                  style={{ width: `${barMin}%` }}
-                />
                 {/* HP残量（左から、緑） */}
                 <div
                   className="absolute left-0 top-0 h-full bg-green-400 transition-all"
-                  style={{ width: `${Math.max(0, 100 - barMax - hazardBarPct)}%` }}
+                  style={{ width: `${remainBarPct}%` }}
                 />
                 {/* 設置技ダメージ（緑の右隣に黄色で表示） */}
                 {totalHazardDmg > 0 && (
                   <div
                     className="absolute top-0 h-full bg-yellow-400 transition-all opacity-80"
                     style={{
-                      left: `${Math.max(0, 100 - barMax - hazardBarPct - poisonBarPct)}%`,
-                      width: `${Math.min(hazardBarPct, 100 - Math.max(0, 100 - barMax - hazardBarPct - poisonBarPct))}%`,
-                    }}
-                  />
-                )}
-                {/* たべのこし回復（ダメージ範囲内に緑で表示） */}
-                {leftoversRecovery > 0 && barMax > 0 && (
-                  <div
-                    className="absolute top-0 h-full bg-emerald-400 transition-all opacity-70"
-                    style={{
-                      left: `${Math.max(0, 100 - barMax)}%`,
-                      width: `${Math.min(leftoversBarPct, barMax)}%`,
+                      left: `${remainBarPct}%`,
+                      width: `${hazardBarPct}%`,
                     }}
                   />
                 )}
@@ -375,8 +357,33 @@ export default function DamageResultPanel({ result, stealthRockHp, disguiseHp, s
                   <div
                     className="absolute top-0 h-full bg-purple-400 transition-all opacity-80"
                     style={{
-                      left: `${Math.max(0, 100 - barMax - poisonBarPct)}%`,
-                      width: `${Math.min(poisonBarPct, 100 - Math.max(0, 100 - barMax - poisonBarPct))}%`,
+                      left: `${remainBarPct + hazardBarPct}%`,
+                      width: `${poisonBarPct}%`,
+                    }}
+                  />
+                )}
+                {/* 乱数ぶれ幅（最大-最小） */}
+                {rangeBarPct > 0 && (
+                  <div
+                    className="absolute top-0 h-full bg-orange-200 transition-all"
+                    style={{
+                      left: `${Math.max(0, 100 - barMax)}%`,
+                      width: `${rangeBarPct}%`,
+                    }}
+                  />
+                )}
+                {/* 確定ダメージ（最小） */}
+                <div
+                  className={`absolute right-0 top-0 h-full transition-all ${exceedsHp ? "bg-red-500" : "bg-orange-400"}`}
+                  style={{ width: `${barMin}%` }}
+                />
+                {/* たべのこし回復（ダメージ範囲内に緑で表示） */}
+                {leftoversRecovery > 0 && barMax > 0 && (
+                  <div
+                    className="absolute top-0 h-full bg-emerald-400 transition-all opacity-70"
+                    style={{
+                      left: `${Math.max(0, 100 - barMax)}%`,
+                      width: `${Math.min(leftoversBarPct, barMax)}%`,
                     }}
                   />
                 )}

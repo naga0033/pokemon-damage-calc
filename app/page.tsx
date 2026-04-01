@@ -149,6 +149,19 @@ function getAbilityBoostedStat(
   return entries[0]?.[0] ?? null;
 }
 
+function computeMobileKoLabel(rolls: number[], hp: number): string {
+  for (let n = 1; n <= 6; n++) {
+    const minTotal = rolls[0] * n;
+    const maxTotal = rolls[rolls.length - 1] * n;
+    if (minTotal >= hp) return `確定${["1", "2", "3", "4", "5", "6"][n - 1]}発`;
+    if (maxTotal >= hp) {
+      const koCount = rolls.filter((r) => r * n >= hp).length;
+      return `乱数${["1", "2", "3", "4", "5", "6"][n - 1]}発 (${koCount}/16)`;
+    }
+  }
+  return "7発以上";
+}
+
 const DEFAULT_STATE: PokemonState = {
   pokemon: null,
   level: 50,
@@ -3594,6 +3607,45 @@ export default function Home() {
     return Math.floor(maxHp * f.toxicTurns / 16);
   }, [defender, defenderStats]);
 
+  const mobileDamageSummary = useMemo(() => {
+    if (!damageResult || !defenderStats) return null;
+
+    const effectiveHp = (defenderCurrentHp != null && defenderCurrentHp >= 1) ? defenderCurrentHp : defenderStats.hp;
+    const totalHazardDmg = (hazardInfo?.stealthRockHp ?? 0) + (hazardInfo?.disguiseHp ?? 0) + (hazardInfo?.spikesHp ?? 0);
+    const leftoversRecovery = defender.fieldConditions.leftovers || defender.item === "leftovers" || defender.item === "black-sludge"
+      ? Math.floor(damageResult.defenderHp / 16)
+      : 0;
+    const minDamage = Math.max(0, damageResult.minDamage - leftoversRecovery);
+    const maxDamage = Math.max(0, damageResult.maxDamage - leftoversRecovery);
+    const minPercent = Math.round((minDamage / effectiveHp) * 1000) / 10;
+    const maxPercent = Math.round((maxDamage / effectiveHp) * 1000) / 10;
+    const rawBarMin = (minDamage / effectiveHp) * 100;
+    const rawBarMax = (maxDamage / effectiveHp) * 100;
+    const barMin = Math.min(rawBarMin, 100);
+    const barMax = Math.min(rawBarMax, 100);
+    const rangeBarPct = Math.max(0, barMax - barMin);
+    const hazardBarPct = Math.min((totalHazardDmg / effectiveHp) * 100, 100);
+    const poisonBarPct = Math.min((poisonDmg / effectiveHp) * 100, 100);
+    const remainBarPct = Math.max(0, 100 - barMax - hazardBarPct - poisonBarPct);
+    const displayKoLabel = damageResult.rolls.length > 0 && effectiveHp < damageResult.defenderHp
+      ? computeMobileKoLabel(damageResult.rolls, effectiveHp)
+      : damageResult.koLabel;
+
+    return {
+      displayKoLabel,
+      minDamage,
+      maxDamage,
+      minPercent,
+      maxPercent,
+      barMin,
+      barMax,
+      rangeBarPct,
+      hazardBarPct,
+      poisonBarPct,
+      remainBarPct,
+    };
+  }, [damageResult, defenderStats, defenderCurrentHp, hazardInfo, defender.fieldConditions.leftovers, defender.item, poisonDmg]);
+
   // Escキーでモーダルを閉じる
   useEffect(() => {
     if (!regModalOpen) return;
@@ -4156,7 +4208,7 @@ export default function Home() {
 
       </main>
 
-      {damageResult && finalMove && attacker.pokemon && defender.pokemon && defenderStats && (
+      {damageResult && finalMove && attacker.pokemon && defender.pokemon && defenderStats && mobileDamageSummary && (
         <div className="fixed inset-x-0 bottom-0 z-40 lg:hidden border-t border-gray-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85 shadow-[0_-8px_24px_rgba(15,23,42,0.12)]">
           <div className="px-3 py-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
             <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3">
@@ -4168,17 +4220,48 @@ export default function Home() {
 
               <div className="min-w-0">
                 <div className="flex items-center justify-between text-[11px] font-semibold text-gray-700">
-                  <span>{damageResult.koLabel}</span>
-                  <span>{damageResult.minDamage}〜{damageResult.maxDamage}</span>
+                  <span>{mobileDamageSummary.displayKoLabel}</span>
+                  <span>{mobileDamageSummary.minDamage}〜{mobileDamageSummary.maxDamage}</span>
                 </div>
-                <div className="mt-1 h-4 overflow-hidden rounded-full bg-gray-200">
+                <div className="relative mt-1 h-4 overflow-hidden rounded-full bg-gray-200">
                   <div
-                    className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-emerald-500"
-                    style={{ width: `${Math.min(damageResult.maxPercent, 100)}%` }}
+                    className="absolute left-0 top-0 h-full bg-green-400 transition-all"
+                    style={{ width: `${mobileDamageSummary.remainBarPct}%` }}
+                  />
+                  {mobileDamageSummary.hazardBarPct > 0 && (
+                    <div
+                      className="absolute top-0 h-full bg-yellow-400 opacity-80 transition-all"
+                      style={{
+                        left: `${mobileDamageSummary.remainBarPct}%`,
+                        width: `${Math.min(mobileDamageSummary.hazardBarPct, 100)}%`,
+                      }}
+                    />
+                  )}
+                  {mobileDamageSummary.poisonBarPct > 0 && (
+                    <div
+                      className="absolute top-0 h-full bg-purple-400 opacity-80 transition-all"
+                      style={{
+                        left: `${mobileDamageSummary.remainBarPct + mobileDamageSummary.hazardBarPct}%`,
+                        width: `${Math.min(mobileDamageSummary.poisonBarPct, 100)}%`,
+                      }}
+                    />
+                  )}
+                  {mobileDamageSummary.rangeBarPct > 0 && (
+                    <div
+                      className="absolute top-0 h-full bg-orange-200 transition-all"
+                      style={{
+                        left: `${Math.max(0, 100 - mobileDamageSummary.barMax)}%`,
+                        width: `${mobileDamageSummary.rangeBarPct}%`,
+                      }}
+                    />
+                  )}
+                  <div
+                    className="absolute right-0 top-0 h-full bg-orange-400 transition-all"
+                    style={{ width: `${mobileDamageSummary.barMin}%` }}
                   />
                 </div>
                 <div className="mt-1 text-center text-[12px] font-bold text-gray-900">
-                  {damageResult.minPercent.toFixed(1)}〜{damageResult.maxPercent.toFixed(1)}%
+                  {mobileDamageSummary.minPercent.toFixed(1)}〜{mobileDamageSummary.maxPercent.toFixed(1)}%
                 </div>
               </div>
 
