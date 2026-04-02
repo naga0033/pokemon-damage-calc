@@ -733,7 +733,7 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
         const allParenNums = [...fullText.matchAll(/\(\+?(\d+)\)/g)].map((m) => parseInt(m[1], 10));
         if (allParenNums.length >= 4 && allParenNums.length <= 6) {
           const sum = allParenNums.reduce((a, b) => a + b, 0);
-          if (sum >= 4 && sum <= 510 && allParenNums.every((v) => v >= 0 && v <= 252)) {
+          if (sum >= 4 && sum <= 66 && allParenNums.every((v) => v >= 0 && v <= 32)) {
             const keys: Array<keyof EVIVs> = ["hp", "attack", "defense", "spAtk", "spDef", "speed"];
             allParenNums.forEach((v, i) => { if (i < 6) evs[keys[i]] = v; });
             hasEvs = true;
@@ -746,7 +746,7 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
     // Phase 3: EV検証（合計510超えの場合はリセット）
     // ════════════════════════════════════════
     const evTotal = Object.values(evs).reduce((a, b) => a + b, 0);
-    if (evTotal > 510) {
+    if (evTotal > 66) {
       (Object.keys(evs) as Array<keyof EVIVs>).forEach((k) => { evs[k] = 0; });
       hasEvs = false;
     }
@@ -1325,7 +1325,7 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
   const totalEvs = Object.values(newRegEvs).reduce((a, b) => a + b, 0);
   const setEv = (key: keyof EVIVs, val: number) => {
     const other = totalEvs - (newRegEvs[key] ?? 0);
-    const clamped = Math.max(0, Math.min(252, Math.min(val, 510 - other)));
+    const clamped = Math.max(0, Math.min(32, Math.min(val, 66 - other)));
     setNewRegEvs((prev) => ({ ...prev, [key]: clamped }));
   };
 
@@ -1343,10 +1343,10 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
     return Math.floor(rawStat * mod);
   };
   const evFromActualStatForReg = (key: keyof EVIVs, target: number, lv?: number): number => {
-    for (let ev = 0; ev <= 252; ev++) {
+    for (let ev = 0; ev <= 32; ev++) {
       if (getActualStatForReg(key, ev, lv) >= target) return ev;
     }
-    return 252;
+    return 32;
   };
   const selectField = (key: keyof EVIVs, mode: 'ev' | 'stat', overrideVal?: number) => {
     const val = overrideVal !== undefined
@@ -1553,7 +1553,7 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
               }`}
             >
               <p className="hidden font-bold text-gray-700 sm:block">スクショをここにドラッグ&ドロップ</p>
-              <p className="text-sm text-gray-500">育成画面の画像を入れると、ポケモン名・努力値・技・持ち物などを新規登録欄へ反映します</p>
+              <p className="text-sm text-gray-500">育成画面の画像を入れると、ポケモン名・能力ポイント・技・持ち物などを新規登録欄へ反映します</p>
               {ocrLoading && <p className="mt-2 text-emerald-600">画像を解析しています...</p>}
               {ocrError && <p className="mt-2 text-red-500">{ocrError}</p>}
               <div className="mt-3 flex justify-center">
@@ -1580,7 +1580,7 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
               <textarea
                 value={pasteText}
                 onChange={(e) => setPasteText(e.target.value)}
-                placeholder={"名前: ポケモン名\n持物: もちもの名\nテラス: ノーマル\n特性: 特性名\n性格: 性格名\n努力値: H252 A0 B0 C252 D4 S0\n技: わざ1, わざ2, わざ3, わざ4"}
+                placeholder={"名前: ポケモン名\n持物: もちもの名\nテラス: ノーマル\n特性: 特性名\n性格: 性格名\n能力PT: H32 A0 B0 C32 D2 S0\n技: わざ1, わざ2, わざ3, わざ4"}
                 className="min-h-[196px] w-full resize-none rounded-xl border-2 border-dashed border-gray-200 bg-white px-4 py-3 text-sm leading-6 text-gray-700 placeholder:text-[clamp(13px,3.2vw,17px)] placeholder:leading-6 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-100"
                 rows={7}
               />
@@ -1987,7 +1987,7 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
                     {/* 努力値・実数値 + MAX/MIN */}
                     <div>
                       <div className="flex items-center justify-between mb-1.5 gap-1 flex-wrap">
-                        <label className="text-xs font-semibold text-gray-600 flex-shrink-0">努力値 / 実数値</label>
+                        <label className="text-xs font-semibold text-gray-600 flex-shrink-0">能力PT / 実数値</label>
                         <div className="flex items-center gap-1.5 ml-auto">
                           {/* レベル入力 */}
                           <div className="flex items-center gap-0.5">
@@ -2026,8 +2026,8 @@ function RegistrationModal({ attacker: _attacker, defender: _defender, onClose, 
                               ⇩ Lv.50に変換
                             </button>
                           )}
-                          <span className={`text-[11px] font-bold flex-shrink-0 ${totalEvs > 510 ? "text-red-500" : totalEvs === 510 ? "text-green-600" : "text-gray-400"}`}>
-                            {totalEvs}/510
+                          <span className={`text-[11px] font-bold flex-shrink-0 ${totalEvs > 66 ? "text-red-500" : totalEvs === 66 ? "text-green-600" : "text-gray-400"}`}>
+                            {totalEvs}/66
                           </span>
                         </div>
                       </div>

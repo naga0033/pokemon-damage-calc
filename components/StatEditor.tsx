@@ -45,13 +45,13 @@ type RankKey = typeof RANK_KEYS[number];
 function calcEvForTarget(
   target: number, base: number, level: number, nature: Nature, statKey: StatKey
 ): number {
-  for (let ev = 0; ev <= 252; ev++) {
+  for (let ev = 0; ev <= 32; ev++) {
     const val = statKey === "hp"
       ? calcHp(base, 31, ev, level)
       : calcStat(base, 31, ev, level, nature, statKey);
     if (val >= target) return ev;
   }
-  return 252;
+  return 32;
 }
 
 function pickNatureForMod(stat: StatKey, mod: "up" | "neutral" | "down", currentNature: Nature): Nature {
@@ -139,14 +139,14 @@ export default function StatEditor(props: Props) {
       const val = parseInt(numpadStr, 10);
       if (!isNaN(val)) {
         if (activeTarget.type === "ev") {
-          const clamped = Math.min(252, Math.max(0, val));
+          const clamped = Math.min(32, Math.max(0, val));
           const others = totalEv - evs[activeTarget.key];
-          onEvChange(activeTarget.key, Math.min(clamped, 510 - others));
+          onEvChange(activeTarget.key, Math.min(clamped, 66 - others));
         } else {
           // final → EV逆算（IV=31固定）
           const ev = calcEvForTarget(val, baseStats[activeTarget.key], level, nature, activeTarget.key);
           const others = totalEv - evs[activeTarget.key];
-          onEvChange(activeTarget.key, Math.min(ev, 510 - others));
+          onEvChange(activeTarget.key, Math.min(ev, 66 - others));
         }
       }
     }
@@ -182,7 +182,7 @@ export default function StatEditor(props: Props) {
       if (isNaN(num)) return prev;
       const { activeTarget } = latestRef.current;
       if (!activeTarget) return prev;
-      if (activeTarget.type === "ev" && num > 252) return prev;
+      if (activeTarget.type === "ev" && num > 32) return prev;
       if (activeTarget.type === "final" && num > 9999) return prev;
       return next;
     });
@@ -191,10 +191,10 @@ export default function StatEditor(props: Props) {
   const handleMax = () => {
     const { activeTarget, baseStats, level, nature } = latestRef.current;
     if (!activeTarget) return;
-    if (activeTarget.type === "ev") { setNumpadStr("252"); return; }
+    if (activeTarget.type === "ev") { setNumpadStr("32"); return; }
     const v = activeTarget.key === "hp"
-      ? calcHp(baseStats[activeTarget.key], 31, 252, level)
-      : calcStat(baseStats[activeTarget.key], 31, 252, level, nature, activeTarget.key);
+      ? calcHp(baseStats[activeTarget.key], 31, 32, level)
+      : calcStat(baseStats[activeTarget.key], 31, 32, level, nature, activeTarget.key);
     setNumpadStr(String(v));
   };
 
@@ -209,8 +209,8 @@ export default function StatEditor(props: Props) {
   };
 
   const getMaxLabel = (type: NumpadType, key: StatKey): string => {
-    if (type === "ev") return "252";
-    return String(key === "hp" ? calcHp(baseStats[key], 31, 252, level) : calcStat(baseStats[key], 31, 252, level, nature, key));
+    if (type === "ev") return "32";
+    return String(key === "hp" ? calcHp(baseStats[key], 31, 32, level) : calcStat(baseStats[key], 31, 32, level, nature, key));
   };
   const getMinLabel = (type: NumpadType, key: StatKey): string => {
     if (type === "ev") return "0";
@@ -336,8 +336,8 @@ export default function StatEditor(props: Props) {
         <div className="grid items-end gap-1 mb-0.5" style={{ gridTemplateColumns: "3rem 1.5rem 1fr 2.8rem 3.2rem" }}>
           <span className="text-[9px] text-gray-400">能力</span>
           <span className="text-[9px] text-gray-400 text-center">種族</span>
-          <span className="text-[9px] text-gray-400 text-center">努力値</span>
-          <span className="text-[9px] text-gray-400 text-center">努力値</span>
+          <span className="text-[9px] text-gray-400 text-center">能力PT</span>
+          <span className="text-[9px] text-gray-400 text-center">能力PT</span>
           <span className="text-[9px] text-gray-400 text-center">実数値</span>
         </div>
         {STAT_KEYS.filter((key) => !visibleStats || visibleStats.includes(key)).map((key) => {
@@ -367,11 +367,11 @@ export default function StatEditor(props: Props) {
                 <div className="flex items-center gap-0.5 min-w-0">
                   <button className="text-[9px] px-0.5 py-0.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-500 font-bold flex-shrink-0"
                     onMouseDown={(e) => { e.preventDefault(); onEvChange(key, 0); }}>0</button>
-                  <input type="range" min={0} max={252} step={4} value={evs[key]}
-                    onChange={(e) => { const v = Math.min(252, Math.max(0, +e.target.value)); const others = totalEv - evs[key]; onEvChange(key, Math.min(v, 510 - others)); }}
+                  <input type="range" min={0} max={32} step={1} value={evs[key]}
+                    onChange={(e) => { const v = Math.min(32, Math.max(0, +e.target.value)); const others = totalEv - evs[key]; onEvChange(key, Math.min(v, 66 - others)); }}
                     className="flex-1 h-2 accent-blue-500 min-w-0" />
                   <button className="text-[9px] px-0.5 py-0.5 rounded bg-orange-100 hover:bg-orange-200 text-orange-700 font-bold flex-shrink-0"
-                    onMouseDown={(e) => { e.preventDefault(); const others = totalEv - evs[key]; onEvChange(key, Math.min(252, 510 - others)); }}>252</button>
+                    onMouseDown={(e) => { e.preventDefault(); const others = totalEv - evs[key]; onEvChange(key, Math.min(32, 66 - others)); }}>32</button>
                 </div>
                 {/* EV入力: スマホ=ネイティブinput / PC=NumpadPopup */}
                 <div className="relative">
@@ -382,9 +382,9 @@ export default function StatEditor(props: Props) {
                     value={String(evs[key])}
                     onChange={(e) => {
                       const raw = e.target.value.replace(/[^0-9]/g, "");
-                      const v = Math.min(252, Math.max(0, parseInt(raw, 10) || 0));
+                      const v = Math.min(32, Math.max(0, parseInt(raw, 10) || 0));
                       const others = totalEv - evs[key];
-                      onEvChange(key, Math.min(v, 510 - others));
+                      onEvChange(key, Math.min(v, 66 - others));
                     }}
                     onFocus={(e) => e.target.select()}
                   />
@@ -468,7 +468,7 @@ export default function StatEditor(props: Props) {
         {/* フッター */}
         <div className="flex items-center justify-between mt-1.5 pt-1">
           <p className="text-[10px] text-gray-400">
-            努力値合計: <span className={totalEv > 510 ? "text-red-500 font-bold" : ""}>{totalEv}</span>/510
+            能力ポイント合計: <span className={totalEv > 66 ? "text-red-500 font-bold" : ""}>{totalEv}</span>/66
           </p>
           {hasAnyRank && (
             <button

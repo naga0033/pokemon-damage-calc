@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.countParsedFields = countParsedFields;
 exports.mergeParsedResults = mergeParsedResults;
 exports.inferNatureAndEvsFromActualStats = inferNatureAndEvsFromActualStats;
+exports.inferNatureFromActualStatsAndEvs = inferNatureFromActualStatsAndEvs;
 const stats_1 = require("./stats");
 function countParsedFields(parsed) {
     let filledCount = 0;
@@ -31,15 +32,30 @@ function mergeParsedResults(primary, fallback) {
         if (mergedMoves.length >= 4)
             break;
     }
-    const primaryHasEvs = Object.values(primary.evs).some((value) => value > 0);
+    const mergedEvs = {
+        hp: primary.evs.hp > 0 ? primary.evs.hp : fallback.evs.hp,
+        attack: primary.evs.attack > 0 ? primary.evs.attack : fallback.evs.attack,
+        defense: primary.evs.defense > 0 ? primary.evs.defense : fallback.evs.defense,
+        spAtk: primary.evs.spAtk > 0 ? primary.evs.spAtk : fallback.evs.spAtk,
+        spDef: primary.evs.spDef > 0 ? primary.evs.spDef : fallback.evs.spDef,
+        speed: primary.evs.speed > 0 ? primary.evs.speed : fallback.evs.speed,
+    };
+    const mergedActualStats = {
+        hp: primary.actualStats.hp ?? fallback.actualStats.hp,
+        attack: primary.actualStats.attack ?? fallback.actualStats.attack,
+        defense: primary.actualStats.defense ?? fallback.actualStats.defense,
+        spAtk: primary.actualStats.spAtk ?? fallback.actualStats.spAtk,
+        spDef: primary.actualStats.spDef ?? fallback.actualStats.spDef,
+        speed: primary.actualStats.speed ?? fallback.actualStats.speed,
+    };
     const merged = {
         pokemonName: primary.pokemonName || fallback.pokemonName,
         item: primary.item || fallback.item,
         teraType: primary.teraType || fallback.teraType,
         nature: primary.nature || fallback.nature,
         ability: primary.ability || fallback.ability,
-        evs: primaryHasEvs ? primary.evs : fallback.evs,
-        actualStats: Object.keys(primary.actualStats).length > 0 ? primary.actualStats : fallback.actualStats,
+        evs: mergedEvs,
+        actualStats: mergedActualStats,
         moves: mergedMoves,
         isChampionsLayout: primary.isChampionsLayout || fallback.isChampionsLayout,
     };
@@ -90,4 +106,19 @@ function inferNatureAndEvsFromActualStats(pokemon, stats, preferredNature) {
         }
     }
     return best ? { nature: best.nature, evs: best.evs } : null;
+}
+function inferNatureFromActualStatsAndEvs(pokemon, stats, evs, preferredNature) {
+    const knownStats = Object.entries(stats).filter(([, value]) => typeof value === "number" && value > 0);
+    if (knownStats.length === 0)
+        return null;
+    const natureOrder = preferredNature
+        ? [preferredNature, ...Object.keys(stats_1.NATURE_DATA).filter((nature) => nature !== preferredNature)]
+        : Object.keys(stats_1.NATURE_DATA);
+    for (const nature of natureOrder) {
+        const calculated = (0, stats_1.calcAllStats)(pokemon.baseStats, stats_1.DEFAULT_IVS, evs, 50, nature);
+        if (knownStats.every(([statKey, target]) => calculated[statKey] === target)) {
+            return nature;
+        }
+    }
+    return null;
 }

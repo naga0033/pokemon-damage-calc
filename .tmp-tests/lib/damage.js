@@ -49,6 +49,20 @@ function rankMult(rank) {
 function moveMatches(move, ...candidates) {
     return candidates.includes(move.name) || candidates.includes(move.japaneseName);
 }
+function getTypeEffectivenessWithGravity(atk, defTypes, gravity) {
+    if (!gravity || atk !== "ground")
+        return (0, type_chart_1.getTypeEffectiveness)(atk, defTypes);
+    return defTypes.reduce((acc, def) => {
+        const single = def === "flying" ? 1 : (0, type_chart_1.getSingleEffectiveness)(atk, def);
+        return acc * single;
+    }, 1);
+}
+function isSpreadMoveInDoubles(move, terrain, isDoubles) {
+    if ((isDoubles ?? false) && terrain === "psychic" && moveMatches(move, "expanding-force", "ワイドフォース")) {
+        return true;
+    }
+    return move.target === "all-opponents" || move.target === "all-other-pokemon";
+}
 /**
  * SV準拠のダメージ計算
  * Damage = floor(floor(floor(2*Lv/5+2) * Power * A/D / 50) + 2) * Modifier
@@ -60,6 +74,24 @@ function calcDamage(input) {
     const attackerIsGrounded = input.attackerIsGrounded ?? true;
     const defenderIsGrounded = input.defenderIsGrounded ?? true;
     const ignoresDefenderAbility = ABILITY_IGNORING_MOVES.has(move.name);
+    const isDoubles = input.isDoubles ?? false;
+    const getWeightWithAbility = (baseWeight, ability, abilityIgnored = false) => {
+        if (baseWeight <= 0 || abilityIgnored)
+            return { weight: baseWeight, modifier: null };
+        if (ability === "heavy-metal") {
+            return {
+                weight: baseWeight * 2,
+                modifier: { label: "ヘビーメタル", value: 2, detail: "体重が2倍" },
+            };
+        }
+        if (ability === "light-metal") {
+            return {
+                weight: baseWeight * 0.5,
+                modifier: { label: "ライトメタル", value: 0.5, detail: "体重が半分" },
+            };
+        }
+        return { weight: baseWeight, modifier: null };
+    };
     // ダイマックス: 防御側のHPを2倍
     const effectiveDefenderHp = input.isDefenderDynamaxed ? defenderHp * 2 : defenderHp;
     // 体重依存技（ヘビーボンバー・ヒートスタンプ）は power=null でも計算を続行
@@ -80,6 +112,7 @@ function calcDamage(input) {
     const effectiveDefTypes = defenderTerastallized && defenderTeraType && defenderTeraType !== "stellar"
         ? [defenderTeraType]
         : defenderTypes;
+    const isExpandingForceSpread = terrain === "psychic" && isDoubles && moveMatches(move, "expanding-force", "ワイドフォース");
     // スキン系特性: ノーマル技のタイプを変換 + 威力1.2倍
     let effectiveMoveType = move.type;
     let skinMod = 1;
@@ -106,14 +139,18 @@ function calcDamage(input) {
         } // エレキスキン
     }
     // タイプ相性
-    let typeEff = (0, type_chart_1.getTypeEffectiveness)(effectiveMoveType, effectiveDefTypes);
+    let typeEff = getTypeEffectivenessWithGravity(effectiveMoveType, effectiveDefTypes, input.gravity ?? false);
+    if (move.name === "tera-blast" && isTerastallized && attackerTeraType === "stellar" && defenderTerastallized) {
+        typeEff *= 2;
+        modifiers.push({ label: "ステラテラバースト", value: 2, detail: "テラスタル相手に抜群" });
+    }
     if (moveMatches(move, "freeze-dry", "フリーズドライ") && effectiveDefTypes.includes("water")) {
         typeEff *= 4;
         modifiers.push({ label: "フリーズドライ", value: 2, detail: "みずタイプへ最終的に抜群" });
     }
     // 防御側特性によるタイプ無効化
     const ignoresGroundImmunity = move.name === "thousand-arrows";
-    if (defenderAbility === "levitate" && effectiveMoveType === "ground" && !ignoresGroundImmunity && !ignoresDefenderAbility)
+    if (defenderAbility === "levitate" && effectiveMoveType === "ground" && !ignoresGroundImmunity && !ignoresDefenderAbility && !(input.gravity ?? false))
         typeEff = 0;
     if (defenderAbility === "volt-absorb" && effectiveMoveType === "electric" && !ignoresDefenderAbility)
         typeEff = 0;
@@ -263,15 +300,31 @@ function calcDamage(input) {
         attackStat = Math.floor(attackStat * 0.75);
         modifiers.push({ label: "わざわいのうつわ", value: 0.75, detail: "特攻を25%低下" });
     }
+    if (input.flowerGift && weather === "sun" && move.category === "physical") {
+        attackStat = Math.floor(attackStat * 1.5);
+        modifiers.push({ label: "フラワーギフト", value: 1.5, detail: "晴れで攻撃上昇" });
+    }
+    if (input.defenderFlowerGift && weather === "sun" && move.category === "special") {
+        defenseStat = Math.floor(defenseStat * 1.5);
+        modifiers.push({ label: "フラワーギフト(特防)", value: 1.5, detail: "晴れで特防上昇" });
+    }
     // ★ステラテラスタル用: テラバースト威力を100に上書き
+    const basePowerForTechnician = move.power ?? 0;
+    const moveMeta = move_metadata_1.MOVE_METADATA[move.name];
     let effectivePower = move.power ?? 0;
     if (move.name === "tera-blast" && isTerastallized && attackerTeraType === "stellar") {
         effectivePower = 100;
     }
     // ヘビーボンバー・ヒートスタンプ: 攻撃側÷防御側の体重比で威力が変動
     if (move.name === "heavy-slam" || move.name === "heat-crash") {
-        const atkW = input.attackerWeight ?? 0;
-        const defW = input.defenderWeight ?? 0;
+        const attackerWeightInfo = getWeightWithAbility(input.attackerWeight ?? 0, attackerAbility);
+        const defenderWeightInfo = getWeightWithAbility(input.defenderWeight ?? 0, defenderAbility, ignoresDefenderAbility);
+        const atkW = attackerWeightInfo.weight;
+        const defW = defenderWeightInfo.weight;
+        if (attackerWeightInfo.modifier)
+            modifiers.push(attackerWeightInfo.modifier);
+        if (defenderWeightInfo.modifier)
+            modifiers.push(defenderWeightInfo.modifier);
         if (atkW > 0 && defW > 0) {
             const ratio = atkW / defW;
             if (ratio >= 5)
@@ -291,7 +344,10 @@ function calcDamage(input) {
     }
     // くさむすび・けたぐり: 防御側の体重で威力が変動
     if (move.name === "grass-knot" || move.name === "low-kick") {
-        const defW = input.defenderWeight ?? 0;
+        const defenderWeightInfo = getWeightWithAbility(input.defenderWeight ?? 0, defenderAbility, ignoresDefenderAbility);
+        const defW = defenderWeightInfo.weight;
+        if (defenderWeightInfo.modifier)
+            modifiers.push(defenderWeightInfo.modifier);
         if (defW > 0) {
             const kg = defW / 10; // PokeAPIはヘクトグラム→kgに変換
             if (kg >= 200)
@@ -322,7 +378,7 @@ function calcDamage(input) {
     }
     if (move.name === "expanding-force" && terrain === "psychic" && attackerIsGrounded) {
         effectivePower = Math.floor(effectivePower * 1.5);
-        modifiers.push({ label: "ワイドフォース", value: 1.5, detail: "サイコフィールドで威力上昇" });
+        modifiers.push({ label: "ワイドフォース", value: 1.5, detail: isExpandingForceSpread ? "サイコフィールド + ダブルで全体化" : "サイコフィールドで威力上昇" });
     }
     if (move.name === "rising-voltage" && terrain === "electric" && defenderIsGrounded) {
         effectivePower *= 2;
@@ -335,6 +391,58 @@ function calcDamage(input) {
     if (move.name === "knock-off" && defenderItem) {
         effectivePower = Math.floor(effectivePower * 1.5);
         modifiers.push({ label: "はたきおとす", value: 1.5, detail: "持ち物ありで威力上昇" });
+    }
+    if (attackerAbility === "technician" && basePowerForTechnician > 0 && basePowerForTechnician <= 60) {
+        effectivePower = Math.floor(effectivePower * 1.5);
+        modifiers.push({ label: "テクニシャン", value: 1.5, detail: "威力60以下の技を強化" });
+    }
+    if (attackerAbility === "sheer-force" && moveMeta?.hasSecondaryEffect) {
+        effectivePower = Math.floor(effectivePower * 1.3);
+        modifiers.push({ label: "ちからずく", value: 1.3, detail: "追加効果を犠牲に威力上昇" });
+    }
+    if (attackerAbility === "reckless" && moveMeta?.isRecoilMove) {
+        effectivePower = Math.floor(effectivePower * 1.2);
+        modifiers.push({ label: "すてみ", value: 1.2, detail: "反動技の威力上昇" });
+    }
+    if (attackerAbility === "water-bubble" && effectiveMoveType === "water") {
+        effectivePower = Math.floor(effectivePower * 2);
+        modifiers.push({ label: "すいほう", value: 2, detail: "みず技の威力2倍" });
+    }
+    if (attackerAbility === "supreme-overlord") {
+        const faintedAllies = Math.max(0, Math.min(5, input.supremeOverlordFaintedAllies ?? 0));
+        if (faintedAllies > 0) {
+            const supremeOverlordMod = 1 + faintedAllies * 0.1;
+            effectivePower = Math.floor(effectivePower * supremeOverlordMod);
+            modifiers.push({ label: "そうだいしょう", value: supremeOverlordMod, detail: `ひんし味方${faintedAllies}体` });
+        }
+    }
+    if (atkItem?.effect === "muscle-band" && move.category === "physical") {
+        effectivePower = Math.floor(effectivePower * 1.1);
+        modifiers.push({ label: "ちからのハチマキ", value: 1.1, detail: "物理技の威力上昇" });
+    }
+    if (atkItem?.effect === "wise-glasses" && move.category === "special") {
+        effectivePower = Math.floor(effectivePower * 1.1);
+        modifiers.push({ label: "ものしりメガネ", value: 1.1, detail: "特殊技の威力上昇" });
+    }
+    if (atkItem?.effect === "punching-glove" && PUNCH_MOVES.has(move.name)) {
+        effectivePower = Math.floor(effectivePower * 1.1);
+        modifiers.push({ label: "パンチグローブ", value: 1.1, detail: "パンチ技の威力上昇" });
+    }
+    if (isDoubles && isSpreadMoveInDoubles(move, terrain, isDoubles)) {
+        effectivePower = Math.floor(effectivePower * 0.75);
+        modifiers.push({ label: "ダブル全体技", value: 0.75, detail: "複数対象補正" });
+    }
+    if (input.helpingHand) {
+        effectivePower = Math.floor(effectivePower * 1.5);
+        modifiers.push({ label: "てだすけ", value: 1.5 });
+    }
+    if (input.steelworker && effectiveMoveType === "steel") {
+        effectivePower = Math.floor(effectivePower * 1.5);
+        modifiers.push({ label: "はがねのせいしん", value: 1.5 });
+    }
+    if (input.powerSpot) {
+        effectivePower = Math.floor(effectivePower * 1.3);
+        modifiers.push({ label: "パワースポット", value: 1.3 });
     }
     // スキン系特性の威力補正（1.2倍）
     if (skinMod !== 1) {
@@ -449,6 +557,11 @@ function calcDamage(input) {
     if (defenderAbility === "heatproof" && effectiveMoveType === "fire" && !ignoresDefenderAbility) {
         defAbilityMod *= 0.5;
     }
+    let waterBubbleResistMod = 1;
+    if (defenderAbility === "water-bubble" && effectiveMoveType === "fire" && !ignoresDefenderAbility) {
+        waterBubbleResistMod = 0.5;
+        modifiers.push({ label: "すいほう(耐性)", value: 0.5, detail: "ほのおダメージ半減" });
+    }
     // マルチスケイル / ファントムガード: HP満タン時のみ0.5倍（連続技は初撃のみ適用）
     const hasMultiscale = !ignoresDefenderAbility && (defenderAbility === "multiscale" || defenderAbility === "shadow-shield" || defenderAbility === "tera-shell") && (input.isDefenderFullHp ?? true);
     const multiscaleMod = hasMultiscale ? 0.5 : 1;
@@ -490,6 +603,15 @@ function calcDamage(input) {
     if (chargeMod !== 1) {
         modifiers.push({ label: "じゅうでん", value: chargeMod });
     }
+    let superEffectiveDriveMod = 1;
+    if (typeEff > 1 && moveMatches(move, "electro-drift", "イナズマドライブ")) {
+        superEffectiveDriveMod = 5461 / 4096;
+        modifiers.push({ label: "イナズマドライブ", value: 1.33, detail: "抜群時に威力上昇" });
+    }
+    else if (typeEff > 1 && moveMatches(move, "collision-course", "アクセルブレイク")) {
+        superEffectiveDriveMod = 5461 / 4096;
+        modifiers.push({ label: "アクセルブレイク", value: 1.33, detail: "抜群時に威力上昇" });
+    }
     // 壁（ひかりの壁・リフレクター・オーロラベール）— 急所時は無効
     let screenMod = 1;
     if (!isCritical) {
@@ -507,6 +629,11 @@ function calcDamage(input) {
     if (screenMod !== 1) {
         modifiers.push({ label: "壁", value: screenMod });
     }
+    let friendGuardMod = 1;
+    if (input.friendGuard) {
+        friendGuardMod = 0.75;
+        modifiers.push({ label: "ともだちガード", value: 0.75, detail: "味方の特性でダメージ軽減" });
+    }
     // ベースダメージ（ステラテラスバーストは effectivePower=100 を使用）
     const base = Math.floor(Math.floor(Math.floor(2 * attackerLevel / 5 + 2) * effectivePower * attackStat / defenseStat / 50) + 2);
     // 16乱数ロール（1回あたり）
@@ -521,14 +648,21 @@ function calcDamage(input) {
         d = Math.floor(d * terrainMod);
         d = Math.floor(d * burnMod);
         d = Math.floor(d * chargeMod);
+        d = Math.floor(d * superEffectiveDriveMod);
         d = Math.floor(d * itemDmgMod);
         d = Math.floor(d * defAbilityMod);
         d = Math.floor(d * screenMod);
+        d = Math.floor(d * waterBubbleResistMod);
+        d = Math.floor(d * friendGuardMod);
         d = Math.floor(d * stellarBoost);
         d = Math.floor(d * extraMod); // マルチスケイル等
         return Math.max(1, d);
     };
-    const hitCount = input.hitCount ?? 1;
+    let hitCount = input.hitCount ?? 1;
+    if (atkItem?.effect === "loaded-dice" && moveMeta?.hits && moveMeta.hits[1] >= 2 && input.hitCount == null) {
+        hitCount = Math.max(moveMeta.hits[0], 4);
+        modifiers.push({ label: "いかさまダイス", value: null, detail: "連続技の最低ヒット数が4回" });
+    }
     const critCount = input.critCount ?? (isCritical ? hitCount : 0);
     if (hitCount <= 1) {
         // 単発技: マルチスケイルを直接適用

@@ -6,6 +6,7 @@ exports.DEFAULT_FIELD = {
     reflect: false,
     auroraVeil: false,
     stealthRock: false,
+    disguiseBroken: false,
     spikesLayers: 0,
     substitute: false,
     leftovers: false,

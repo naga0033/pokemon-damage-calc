@@ -6,11 +6,13 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const node_test_1 = __importDefault(require("node:test"));
 const strict_1 = __importDefault(require("node:assert/strict"));
 const damage_1 = require("../lib/damage");
+const items_1 = require("../lib/items");
 const baseMove = (overrides = {}) => ({
     name: "thunderbolt",
     japaneseName: "10まんボルト",
     type: "electric",
     category: "special",
+    target: "selected-pokemon",
     power: 90,
     accuracy: 100,
     priority: 0,
@@ -43,6 +45,7 @@ function createInput(move, overrides = {}) {
         attackerIsGrounded: true,
         defenderIsGrounded: true,
         attackerAbilityBoostedStat: null,
+        supremeOverlordFaintedAllies: 0,
         ...overrides,
     };
 }
@@ -174,6 +177,18 @@ function createInput(move, overrides = {}) {
     strict_1.default.equal((0, damage_1.isGrounded)(["flying"], "", "", "stellar", true), false);
     strict_1.default.equal((0, damage_1.isGrounded)(["flying"], "", "", "ground", true), true);
 });
+(0, node_test_1.default)("fling power changes based on the held item", () => {
+    strict_1.default.equal((0, items_1.getFlingPower)("sitrus-berry"), 10);
+    strict_1.default.equal((0, items_1.getFlingPower)("life-orb"), 30);
+    strict_1.default.equal((0, items_1.getFlingPower)("eviolite"), 40);
+    strict_1.default.equal((0, items_1.getFlingPower)("sharp-beak"), 50);
+    strict_1.default.equal((0, items_1.getFlingPower)("rocky-helmet"), 60);
+    strict_1.default.equal((0, items_1.getFlingPower)("dragon-fang"), 70);
+    strict_1.default.equal((0, items_1.getFlingPower)("weakness-policy"), 80);
+    strict_1.default.equal((0, items_1.getFlingPower)("hard-stone"), 100);
+    strict_1.default.equal((0, items_1.getFlingPower)("iron-ball"), 130);
+    strict_1.default.equal((0, items_1.getFlingPower)(""), null);
+});
 (0, node_test_1.default)("freeze-dry becomes super effective against water", () => {
     const move = baseMove({
         name: "freeze-dry",
@@ -206,6 +221,211 @@ function createInput(move, overrides = {}) {
         defenderTypes: ["water"],
     }));
     strict_1.default.equal(result.typeEffectiveness, 2);
+});
+(0, node_test_1.default)("stellar tera blast becomes super effective against terastallized defenders", () => {
+    const move = baseMove({
+        name: "tera-blast",
+        japaneseName: "テラバースト",
+        type: "stellar",
+        power: 80,
+    });
+    const versusTerastallized = (0, damage_1.calcDamage)(createInput(move, {
+        attackerTypes: ["dragon", "flying"],
+        defenderTypes: ["water"],
+        attackerTeraType: "stellar",
+        isTerastallized: true,
+        defenderTeraType: "fire",
+        defenderTerastallized: true,
+    }));
+    const versusNormal = (0, damage_1.calcDamage)(createInput(move, {
+        attackerTypes: ["dragon", "flying"],
+        defenderTypes: ["water"],
+        attackerTeraType: "stellar",
+        isTerastallized: true,
+        defenderTeraType: null,
+        defenderTerastallized: false,
+    }));
+    strict_1.default.equal(versusTerastallized.typeEffectiveness, 2);
+    strict_1.default.equal(versusNormal.typeEffectiveness, 1);
+    strict_1.default.equal(versusTerastallized.modifiers?.some((modifier) => modifier.label === "ステラテラバースト"), true);
+    strict_1.default.ok(versusTerastallized.maxDamage > versusNormal.maxDamage);
+});
+(0, node_test_1.default)("doubles spread move gets reduced power", () => {
+    const move = baseMove({
+        name: "rock-slide",
+        japaneseName: "いわなだれ",
+        type: "rock",
+        category: "physical",
+        target: "all-opponents",
+        power: 75,
+    });
+    const singles = (0, damage_1.calcDamage)(createInput(move, {
+        attackerTypes: ["rock"],
+        defenderTypes: ["fire"],
+        attackStat: 180,
+        isDoubles: false,
+    }));
+    const doubles = (0, damage_1.calcDamage)(createInput(move, {
+        attackerTypes: ["rock"],
+        defenderTypes: ["fire"],
+        attackStat: 180,
+        isDoubles: true,
+    }));
+    strict_1.default.ok(doubles.maxDamage < singles.maxDamage);
+    strict_1.default.equal(doubles.modifiers?.some((modifier) => modifier.label === "ダブル全体技"), true);
+});
+(0, node_test_1.default)("astral barrage also gets doubles spread reduction", () => {
+    const move = baseMove({
+        name: "astral-barrage",
+        japaneseName: "アストラルビット",
+        type: "ghost",
+        target: "all-opponents",
+        power: 120,
+    });
+    const singles = (0, damage_1.calcDamage)(createInput(move, {
+        attackerTypes: ["ghost"],
+        defenderTypes: ["psychic"],
+        isDoubles: false,
+    }));
+    const doubles = (0, damage_1.calcDamage)(createInput(move, {
+        attackerTypes: ["ghost"],
+        defenderTypes: ["psychic"],
+        isDoubles: true,
+    }));
+    strict_1.default.ok(doubles.maxDamage < singles.maxDamage);
+    strict_1.default.equal(doubles.modifiers?.some((modifier) => modifier.label === "ダブル全体技"), true);
+});
+(0, node_test_1.default)("helping hand, steely spirit, and power spot boost damage", () => {
+    const move = baseMove({
+        name: "flash-cannon",
+        japaneseName: "ラスターカノン",
+        type: "steel",
+        power: 80,
+    });
+    const normal = (0, damage_1.calcDamage)(createInput(move, {
+        attackerTypes: ["steel"],
+        defenderTypes: ["fairy"],
+    }));
+    const boosted = (0, damage_1.calcDamage)(createInput(move, {
+        attackerTypes: ["steel"],
+        defenderTypes: ["fairy"],
+        helpingHand: true,
+        steelworker: true,
+        powerSpot: true,
+    }));
+    strict_1.default.ok(boosted.maxDamage > normal.maxDamage);
+    strict_1.default.equal(boosted.modifiers?.some((modifier) => modifier.label === "てだすけ"), true);
+    strict_1.default.equal(boosted.modifiers?.some((modifier) => modifier.label === "はがねのせいしん"), true);
+    strict_1.default.equal(boosted.modifiers?.some((modifier) => modifier.label === "パワースポット"), true);
+});
+(0, node_test_1.default)("flower gift boosts physical attack only in sun", () => {
+    const move = baseMove({
+        name: "earthquake",
+        japaneseName: "じしん",
+        type: "ground",
+        category: "physical",
+        power: 100,
+    });
+    const sunny = (0, damage_1.calcDamage)(createInput(move, {
+        attackerTypes: ["ground"],
+        defenderTypes: ["steel"],
+        flowerGift: true,
+        weather: "sun",
+    }));
+    const neutral = (0, damage_1.calcDamage)(createInput(move, {
+        attackerTypes: ["ground"],
+        defenderTypes: ["steel"],
+        flowerGift: true,
+        weather: "none",
+    }));
+    strict_1.default.ok(sunny.maxDamage > neutral.maxDamage);
+    strict_1.default.equal(sunny.modifiers?.some((modifier) => modifier.label === "フラワーギフト"), true);
+});
+(0, node_test_1.default)("defender flower gift boosts special defense in sun", () => {
+    const specialMove = baseMove({
+        name: "shadow-ball",
+        japaneseName: "シャドーボール",
+        type: "ghost",
+        power: 80,
+    });
+    const physicalMove = baseMove({
+        name: "shadow-claw",
+        japaneseName: "シャドークロー",
+        type: "ghost",
+        category: "physical",
+        power: 70,
+    });
+    const sunnyBoosted = (0, damage_1.calcDamage)(createInput(specialMove, {
+        attackerTypes: ["ghost"],
+        defenderTypes: ["psychic"],
+        defenderFlowerGift: true,
+        weather: "sun",
+    }));
+    const noSun = (0, damage_1.calcDamage)(createInput(specialMove, {
+        attackerTypes: ["ghost"],
+        defenderTypes: ["psychic"],
+        defenderFlowerGift: true,
+        weather: "none",
+    }));
+    const physicalSunny = (0, damage_1.calcDamage)(createInput(physicalMove, {
+        attackerTypes: ["ghost"],
+        defenderTypes: ["psychic"],
+        defenderFlowerGift: true,
+        weather: "sun",
+    }));
+    const physicalNeutral = (0, damage_1.calcDamage)(createInput(physicalMove, {
+        attackerTypes: ["ghost"],
+        defenderTypes: ["psychic"],
+        defenderFlowerGift: false,
+        weather: "sun",
+    }));
+    strict_1.default.ok(sunnyBoosted.maxDamage < noSun.maxDamage);
+    strict_1.default.equal(sunnyBoosted.modifiers?.some((modifier) => modifier.label === "フラワーギフト(特防)"), true);
+    strict_1.default.equal(physicalSunny.maxDamage, physicalNeutral.maxDamage);
+});
+(0, node_test_1.default)("friend guard reduces damage by 25%", () => {
+    const move = baseMove({
+        name: "moonblast",
+        japaneseName: "ムーンフォース",
+        type: "fairy",
+        power: 95,
+    });
+    const normal = (0, damage_1.calcDamage)(createInput(move, {
+        attackerTypes: ["fairy"],
+        defenderTypes: ["dragon"],
+    }));
+    const guarded = (0, damage_1.calcDamage)(createInput(move, {
+        attackerTypes: ["fairy"],
+        defenderTypes: ["dragon"],
+        friendGuard: true,
+    }));
+    strict_1.default.ok(guarded.maxDamage < normal.maxDamage);
+    strict_1.default.equal(guarded.modifiers?.some((modifier) => modifier.label === "ともだちガード"), true);
+});
+(0, node_test_1.default)("gravity lets ground moves hit flying and levitate targets", () => {
+    const move = baseMove({
+        name: "earthquake",
+        japaneseName: "じしん",
+        type: "ground",
+        category: "physical",
+        power: 100,
+    });
+    const versusFlying = (0, damage_1.calcDamage)(createInput(move, {
+        attackerTypes: ["ground"],
+        defenderTypes: ["flying", "steel"],
+        gravity: true,
+        attackStat: 180,
+    }));
+    const versusLevitate = (0, damage_1.calcDamage)(createInput(move, {
+        attackerTypes: ["ground"],
+        defenderTypes: ["electric"],
+        defenderAbility: "levitate",
+        gravity: true,
+        attackStat: 180,
+    }));
+    strict_1.default.ok(versusFlying.maxDamage > 0);
+    strict_1.default.equal(versusFlying.typeEffectiveness, 2);
+    strict_1.default.ok(versusLevitate.maxDamage > 0);
 });
 (0, node_test_1.default)("thousand arrows hits flying and levitate targets", () => {
     const move = baseMove({
@@ -406,6 +626,36 @@ function createInput(move, overrides = {}) {
         defenderTypes: ["dark"],
     })).maxDamage);
 });
+(0, node_test_1.default)("supreme overlord scales with fainted allies", () => {
+    const move = baseMove({
+        name: "kowtow-cleave",
+        japaneseName: "ドゲザン",
+        type: "dark",
+        category: "physical",
+        power: 85,
+    });
+    const neutral = (0, damage_1.calcDamage)(createInput(move, {
+        attackerAbility: "supreme-overlord",
+        attackerTypes: ["dark"],
+        defenderTypes: ["ghost"],
+        supremeOverlordFaintedAllies: 0,
+    }));
+    const threeFainted = (0, damage_1.calcDamage)(createInput(move, {
+        attackerAbility: "supreme-overlord",
+        attackerTypes: ["dark"],
+        defenderTypes: ["ghost"],
+        supremeOverlordFaintedAllies: 3,
+    }));
+    const fiveFainted = (0, damage_1.calcDamage)(createInput(move, {
+        attackerAbility: "supreme-overlord",
+        attackerTypes: ["dark"],
+        defenderTypes: ["ghost"],
+        supremeOverlordFaintedAllies: 5,
+    }));
+    strict_1.default.ok(threeFainted.maxDamage > neutral.maxDamage);
+    strict_1.default.ok(fiveFainted.maxDamage > threeFainted.maxDamage);
+    strict_1.default.equal(fiveFainted.modifiers?.some((modifier) => modifier.label === "そうだいしょう"), true);
+});
 (0, node_test_1.default)("sniper, tinted lens, punk rock defense, and bulletproof apply their special rules", () => {
     const resistedMove = baseMove({
         name: "leaf-storm",
@@ -515,4 +765,359 @@ function createInput(move, overrides = {}) {
     }));
     strict_1.default.equal(boostedVsUnaware.maxDamage, neutralVsUnaware.maxDamage);
     strict_1.default.ok(boostedShadowRay.maxDamage > neutralShadowRay.maxDamage);
+});
+(0, node_test_1.default)("technician boosts moves with base power 60 or less", () => {
+    const sixtyPowerMove = baseMove({
+        name: "mach-punch",
+        japaneseName: "マッハパンチ",
+        type: "fighting",
+        category: "physical",
+        power: 60,
+    });
+    const seventyPowerMove = baseMove({
+        name: "psycho-cut",
+        japaneseName: "サイコカッター",
+        type: "psychic",
+        category: "physical",
+        power: 70,
+    });
+    const boosted = (0, damage_1.calcDamage)(createInput(sixtyPowerMove, {
+        attackerAbility: "technician",
+        attackerTypes: ["fighting"],
+        defenderTypes: ["normal"],
+    }));
+    const neutralSixty = (0, damage_1.calcDamage)(createInput(sixtyPowerMove, {
+        attackerTypes: ["fighting"],
+        defenderTypes: ["normal"],
+    }));
+    const neutralSeventy = (0, damage_1.calcDamage)(createInput(seventyPowerMove, {
+        attackerTypes: ["psychic"],
+        defenderTypes: ["poison"],
+    }));
+    const technicianSeventy = (0, damage_1.calcDamage)(createInput(seventyPowerMove, {
+        attackerAbility: "technician",
+        attackerTypes: ["psychic"],
+        defenderTypes: ["poison"],
+    }));
+    strict_1.default.ok(boosted.maxDamage > neutralSixty.maxDamage);
+    strict_1.default.equal(boosted.modifiers?.some((modifier) => modifier.label === "テクニシャン"), true);
+    strict_1.default.equal(technicianSeventy.maxDamage, neutralSeventy.maxDamage);
+});
+(0, node_test_1.default)("sheer force boosts moves with secondary effects", () => {
+    const secondaryMove = baseMove({
+        name: "flamethrower",
+        japaneseName: "かえんほうしゃ",
+        type: "fire",
+        category: "special",
+        power: 90,
+    });
+    const plainMove = baseMove({
+        name: "surf",
+        japaneseName: "なみのり",
+        type: "water",
+        category: "special",
+        power: 90,
+    });
+    const sheerForceBoosted = (0, damage_1.calcDamage)(createInput(secondaryMove, {
+        attackerAbility: "sheer-force",
+        attackerTypes: ["fire"],
+        defenderTypes: ["grass"],
+    }));
+    const secondaryNeutral = (0, damage_1.calcDamage)(createInput(secondaryMove, {
+        attackerTypes: ["fire"],
+        defenderTypes: ["grass"],
+    }));
+    const sheerForcePlain = (0, damage_1.calcDamage)(createInput(plainMove, {
+        attackerAbility: "sheer-force",
+        attackerTypes: ["water"],
+        defenderTypes: ["fire"],
+    }));
+    const plainNeutral = (0, damage_1.calcDamage)(createInput(plainMove, {
+        attackerTypes: ["water"],
+        defenderTypes: ["fire"],
+    }));
+    strict_1.default.ok(sheerForceBoosted.maxDamage > secondaryNeutral.maxDamage);
+    strict_1.default.equal(sheerForceBoosted.modifiers?.some((modifier) => modifier.label === "ちからずく"), true);
+    strict_1.default.equal(sheerForcePlain.maxDamage, plainNeutral.maxDamage);
+});
+(0, node_test_1.default)("reckless boosts recoil moves", () => {
+    const recoilMove = baseMove({
+        name: "brave-bird",
+        japaneseName: "ブレイブバード",
+        type: "flying",
+        category: "physical",
+        power: 120,
+    });
+    const nonRecoilMove = baseMove({
+        name: "drill-peck",
+        japaneseName: "ドリルくちばし",
+        type: "flying",
+        category: "physical",
+        power: 80,
+    });
+    const recklessBoosted = (0, damage_1.calcDamage)(createInput(recoilMove, {
+        attackerAbility: "reckless",
+        attackerTypes: ["flying"],
+        defenderTypes: ["grass"],
+    }));
+    const recoilNeutral = (0, damage_1.calcDamage)(createInput(recoilMove, {
+        attackerTypes: ["flying"],
+        defenderTypes: ["grass"],
+    }));
+    const recklessPlain = (0, damage_1.calcDamage)(createInput(nonRecoilMove, {
+        attackerAbility: "reckless",
+        attackerTypes: ["flying"],
+        defenderTypes: ["grass"],
+    }));
+    const plainNeutral = (0, damage_1.calcDamage)(createInput(nonRecoilMove, {
+        attackerTypes: ["flying"],
+        defenderTypes: ["grass"],
+    }));
+    strict_1.default.ok(recklessBoosted.maxDamage > recoilNeutral.maxDamage);
+    strict_1.default.equal(recklessBoosted.modifiers?.some((modifier) => modifier.label === "すてみ"), true);
+    strict_1.default.equal(recklessPlain.maxDamage, plainNeutral.maxDamage);
+});
+(0, node_test_1.default)("water bubble doubles water moves and halves fire damage", () => {
+    const waterMove = baseMove({
+        name: "water-gun",
+        japaneseName: "みずでっぽう",
+        type: "water",
+        category: "special",
+        power: 40,
+    });
+    const fireMove = baseMove({
+        name: "flamethrower",
+        japaneseName: "かえんほうしゃ",
+        type: "fire",
+        category: "special",
+        power: 90,
+    });
+    const waterBubbleAttack = (0, damage_1.calcDamage)(createInput(waterMove, {
+        attackerAbility: "water-bubble",
+        attackerTypes: ["water"],
+        defenderTypes: ["rock"],
+    }));
+    const normalWaterAttack = (0, damage_1.calcDamage)(createInput(waterMove, {
+        attackerTypes: ["water"],
+        defenderTypes: ["rock"],
+    }));
+    const waterBubbleDefense = (0, damage_1.calcDamage)(createInput(fireMove, {
+        attackerTypes: ["fire"],
+        defenderTypes: ["bug"],
+        defenderAbility: "water-bubble",
+    }));
+    const normalFireAttack = (0, damage_1.calcDamage)(createInput(fireMove, {
+        attackerTypes: ["fire"],
+        defenderTypes: ["bug"],
+    }));
+    strict_1.default.ok(waterBubbleAttack.maxDamage > normalWaterAttack.maxDamage);
+    strict_1.default.equal(waterBubbleAttack.modifiers?.some((modifier) => modifier.label === "すいほう"), true);
+    strict_1.default.ok(waterBubbleDefense.maxDamage < normalFireAttack.maxDamage);
+    strict_1.default.equal(waterBubbleDefense.modifiers?.some((modifier) => modifier.label === "すいほう(耐性)"), true);
+});
+(0, node_test_1.default)("muscle band boosts physical moves", () => {
+    const physicalMove = baseMove({
+        name: "drain-punch",
+        japaneseName: "ドレインパンチ",
+        type: "fighting",
+        category: "physical",
+        power: 75,
+    });
+    const specialMove = baseMove({
+        name: "shadow-ball",
+        japaneseName: "シャドーボール",
+        type: "ghost",
+        category: "special",
+        power: 80,
+    });
+    const boostedPhysical = (0, damage_1.calcDamage)(createInput(physicalMove, {
+        attackerItem: "muscle-band",
+        attackerTypes: ["fighting"],
+        defenderTypes: ["normal"],
+    }));
+    const neutralPhysical = (0, damage_1.calcDamage)(createInput(physicalMove, {
+        attackerTypes: ["fighting"],
+        defenderTypes: ["normal"],
+    }));
+    const boostedSpecial = (0, damage_1.calcDamage)(createInput(specialMove, {
+        attackerItem: "muscle-band",
+        attackerTypes: ["ghost"],
+        defenderTypes: ["psychic"],
+    }));
+    const neutralSpecial = (0, damage_1.calcDamage)(createInput(specialMove, {
+        attackerTypes: ["ghost"],
+        defenderTypes: ["psychic"],
+    }));
+    strict_1.default.ok(boostedPhysical.maxDamage > neutralPhysical.maxDamage);
+    strict_1.default.equal(boostedPhysical.modifiers?.some((modifier) => modifier.label === "ちからのハチマキ"), true);
+    strict_1.default.equal(boostedSpecial.maxDamage, neutralSpecial.maxDamage);
+});
+(0, node_test_1.default)("wise glasses boosts special moves", () => {
+    const specialMove = baseMove({
+        name: "shadow-ball",
+        japaneseName: "シャドーボール",
+        type: "ghost",
+        category: "special",
+        power: 80,
+    });
+    const physicalMove = baseMove({
+        name: "drain-punch",
+        japaneseName: "ドレインパンチ",
+        type: "fighting",
+        category: "physical",
+        power: 75,
+    });
+    const boostedSpecial = (0, damage_1.calcDamage)(createInput(specialMove, {
+        attackerItem: "wise-glasses",
+        attackerTypes: ["ghost"],
+        defenderTypes: ["psychic"],
+    }));
+    const neutralSpecial = (0, damage_1.calcDamage)(createInput(specialMove, {
+        attackerTypes: ["ghost"],
+        defenderTypes: ["psychic"],
+    }));
+    const boostedPhysical = (0, damage_1.calcDamage)(createInput(physicalMove, {
+        attackerItem: "wise-glasses",
+        attackerTypes: ["fighting"],
+        defenderTypes: ["normal"],
+    }));
+    const neutralPhysical = (0, damage_1.calcDamage)(createInput(physicalMove, {
+        attackerTypes: ["fighting"],
+        defenderTypes: ["normal"],
+    }));
+    strict_1.default.ok(boostedSpecial.maxDamage > neutralSpecial.maxDamage);
+    strict_1.default.equal(boostedSpecial.modifiers?.some((modifier) => modifier.label === "ものしりメガネ"), true);
+    strict_1.default.equal(boostedPhysical.maxDamage, neutralPhysical.maxDamage);
+});
+(0, node_test_1.default)("punching glove boosts punch moves", () => {
+    const punchMove = baseMove({
+        name: "drain-punch",
+        japaneseName: "ドレインパンチ",
+        type: "fighting",
+        category: "physical",
+        power: 75,
+    });
+    const nonPunchMove = baseMove({
+        name: "close-combat",
+        japaneseName: "インファイト",
+        type: "fighting",
+        category: "physical",
+        power: 120,
+    });
+    const boostedPunch = (0, damage_1.calcDamage)(createInput(punchMove, {
+        attackerItem: "punching-glove",
+        attackerTypes: ["fighting"],
+        defenderTypes: ["normal"],
+    }));
+    const neutralPunch = (0, damage_1.calcDamage)(createInput(punchMove, {
+        attackerTypes: ["fighting"],
+        defenderTypes: ["normal"],
+    }));
+    const boostedNonPunch = (0, damage_1.calcDamage)(createInput(nonPunchMove, {
+        attackerItem: "punching-glove",
+        attackerTypes: ["fighting"],
+        defenderTypes: ["normal"],
+    }));
+    const neutralNonPunch = (0, damage_1.calcDamage)(createInput(nonPunchMove, {
+        attackerTypes: ["fighting"],
+        defenderTypes: ["normal"],
+    }));
+    strict_1.default.ok(boostedPunch.maxDamage > neutralPunch.maxDamage);
+    strict_1.default.equal(boostedPunch.modifiers?.some((modifier) => modifier.label === "パンチグローブ"), true);
+    strict_1.default.equal(boostedNonPunch.maxDamage, neutralNonPunch.maxDamage);
+});
+(0, node_test_1.default)("expanding force becomes spread move in doubles on psychic terrain", () => {
+    const move = baseMove({
+        name: "expanding-force",
+        japaneseName: "ワイドフォース",
+        type: "psychic",
+        category: "special",
+        power: 80,
+    });
+    const doubles = (0, damage_1.calcDamage)(createInput(move, {
+        terrain: "psychic",
+        isDoubles: true,
+        attackerIsGrounded: true,
+        attackerTypes: ["psychic"],
+        defenderTypes: ["fighting"],
+    }));
+    const singles = (0, damage_1.calcDamage)(createInput(move, {
+        terrain: "psychic",
+        isDoubles: false,
+        attackerIsGrounded: true,
+        attackerTypes: ["psychic"],
+        defenderTypes: ["fighting"],
+    }));
+    strict_1.default.ok(doubles.maxDamage < singles.maxDamage);
+    strict_1.default.equal(doubles.modifiers?.some((modifier) => modifier.label === "ダブル全体技"), true);
+    strict_1.default.equal(singles.modifiers?.some((modifier) => modifier.label === "ダブル全体技"), false);
+    strict_1.default.equal(doubles.modifiers?.find((modifier) => modifier.label === "ワイドフォース")?.detail, "サイコフィールド + ダブルで全体化");
+});
+(0, node_test_1.default)("heavy metal and light metal affect weight-based moves", () => {
+    const move = baseMove({
+        name: "grass-knot",
+        japaneseName: "くさむすび",
+        type: "grass",
+        category: "special",
+        power: null,
+    });
+    const heavyMetal = (0, damage_1.calcDamage)(createInput(move, {
+        attackerTypes: ["grass"],
+        defenderTypes: ["water"],
+        defenderWeight: 500,
+        defenderAbility: "heavy-metal",
+    }));
+    const neutral = (0, damage_1.calcDamage)(createInput(move, {
+        attackerTypes: ["grass"],
+        defenderTypes: ["water"],
+        defenderWeight: 500,
+    }));
+    const lightMetal = (0, damage_1.calcDamage)(createInput(move, {
+        attackerTypes: ["grass"],
+        defenderTypes: ["water"],
+        defenderWeight: 500,
+        defenderAbility: "light-metal",
+    }));
+    strict_1.default.ok(heavyMetal.maxDamage > neutral.maxDamage);
+    strict_1.default.ok(lightMetal.maxDamage < neutral.maxDamage);
+    strict_1.default.equal(heavyMetal.modifiers?.some((modifier) => modifier.label === "ヘビーメタル"), true);
+    strict_1.default.equal(lightMetal.modifiers?.some((modifier) => modifier.label === "ライトメタル"), true);
+});
+(0, node_test_1.default)("collision course and electro drift get boosted on super effective hits", () => {
+    const collisionCourse = baseMove({
+        name: "collision-course",
+        japaneseName: "アクセルブレイク",
+        type: "fighting",
+        category: "physical",
+        power: 100,
+    });
+    const electroDrift = baseMove({
+        name: "electro-drift",
+        japaneseName: "イナズマドライブ",
+        type: "electric",
+        category: "special",
+        power: 100,
+    });
+    const collisionSuper = (0, damage_1.calcDamage)(createInput(collisionCourse, {
+        attackerTypes: ["fighting"],
+        defenderTypes: ["normal"],
+    }));
+    const collisionNeutral = (0, damage_1.calcDamage)(createInput(collisionCourse, {
+        attackerTypes: ["fighting"],
+        defenderTypes: ["dragon"],
+    }));
+    const electroSuper = (0, damage_1.calcDamage)(createInput(electroDrift, {
+        attackerTypes: ["electric"],
+        defenderTypes: ["water"],
+    }));
+    const electroNeutral = (0, damage_1.calcDamage)(createInput(electroDrift, {
+        attackerTypes: ["electric"],
+        defenderTypes: ["dragon"],
+    }));
+    strict_1.default.ok(collisionSuper.maxDamage > collisionNeutral.maxDamage);
+    strict_1.default.ok(electroSuper.maxDamage > electroNeutral.maxDamage);
+    strict_1.default.equal(collisionSuper.modifiers?.some((modifier) => modifier.label === "アクセルブレイク"), true);
+    strict_1.default.equal(collisionNeutral.modifiers?.some((modifier) => modifier.label === "アクセルブレイク"), false);
+    strict_1.default.equal(electroSuper.modifiers?.some((modifier) => modifier.label === "イナズマドライブ"), true);
+    strict_1.default.equal(electroNeutral.modifiers?.some((modifier) => modifier.label === "イナズマドライブ"), false);
 });
