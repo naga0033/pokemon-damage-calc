@@ -1,4 +1,4 @@
-<svg width="1024" height="1024" viewBox="190 175 644 644" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <!-- グラデーション定義 -->
     <linearGradient id="goldGrad" x1="0" y1="0" x2="0" y2="1">
@@ -12,7 +12,7 @@
       <stop offset="50%" stop-color="#D4A017"/>
       <stop offset="100%" stop-color="#8B6914"/>
     </linearGradient>
-    <linearGradient id="purpleGrad" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="redGrad" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#9B59B6"/>
       <stop offset="100%" stop-color="#4A1A6B"/>
     </linearGradient>
@@ -20,15 +20,19 @@
       <stop offset="0%" stop-color="#2A2A2A"/>
       <stop offset="100%" stop-color="#0A0A0A"/>
     </linearGradient>
-    <linearGradient id="ballTop" x1="512" y1="290" x2="512" y2="497" gradientUnits="userSpaceOnUse">
+    <linearGradient id="ballTop" x1="512" y1="340" x2="512" y2="500" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stop-color="#9B59B6"/>
       <stop offset="100%" stop-color="#6C3483"/>
     </linearGradient>
-    <linearGradient id="ballBottom" x1="512" y1="503" x2="512" y2="710" gradientUnits="userSpaceOnUse">
+    <linearGradient id="ballBottom" x1="512" y1="500" x2="512" y2="660" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stop-color="#F5F5F5"/>
       <stop offset="100%" stop-color="#D0D0D0"/>
     </linearGradient>
-    <linearGradient id="crownGrad" x1="512" y1="240" x2="512" y2="340" gradientUnits="userSpaceOnUse">
+    <linearGradient id="masterM" x1="512" y1="380" x2="512" y2="480" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FF69B4"/>
+      <stop offset="100%" stop-color="#E04890"/>
+    </linearGradient>
+    <linearGradient id="crownGrad" x1="512" y1="140" x2="512" y2="310" gradientUnits="userSpaceOnUse">
       <stop offset="0%" stop-color="#FFF5C0"/>
       <stop offset="40%" stop-color="#FFD700"/>
       <stop offset="100%" stop-color="#B8860B"/>
@@ -47,16 +51,24 @@
     <filter id="shadow">
       <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity="0.5"/>
     </filter>
+    <filter id="innerGlow">
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
   </defs>
 
-  <!-- 背景 -->
-  <rect x="0" y="0" width="1024" height="1024" fill="url(#bgGrad)"/>
+  <!-- 背景（角丸） -->
+  <rect width="1024" height="1024" rx="200" fill="url(#bgGrad)"/>
 
   <!-- 背景の微妙な放射グラデーション -->
-  <circle cx="512" cy="497" r="400" fill="#D4A017" fill-opacity="0.06"/>
+  <circle cx="512" cy="500" r="400" fill="#D4A017" fill-opacity="0.06"/>
 
-  <!-- 下部V字（紫翼） -->
-  <path d="M512 920 L180 480 L280 420 L512 720 L744 420 L844 480 Z" fill="url(#purpleGrad)" filter="url(#shadow)"/>
+  <!-- 下部V字（赤い翼） -->
+  <path d="M512 920 L180 480 L280 420 L512 720 L744 420 L844 480 Z" fill="url(#redGrad)" filter="url(#shadow)"/>
+  <!-- 紫翼の内側ライン -->
   <path d="M512 860 L230 490 L290 450 L512 690 L734 450 L794 490 Z" fill="none" stroke="#BB7FD6" stroke-width="2" stroke-opacity="0.4"/>
 
   <!-- 黒い下部アクセント -->
@@ -74,66 +86,72 @@
   <path d="M60 420 L180 300 L260 360 L160 440 Z" fill="url(#goldGrad)" filter="url(#shadow)"/>
   <path d="M964 420 L844 300 L764 360 L864 440 Z" fill="url(#goldGrad)" filter="url(#shadow)"/>
 
-  <!-- マスターボール外枠（金リング） - 大きく -->
-  <circle cx="512" cy="497" r="210" fill="url(#goldGrad)" filter="url(#shadow)"/>
-  <circle cx="512" cy="497" r="193" fill="#222"/>
+  <!-- モンスターボール外枠（金リング） -->
+  <circle cx="512" cy="500" r="175" fill="url(#goldGrad)" filter="url(#shadow)"/>
+  <circle cx="512" cy="500" r="160" fill="#222"/>
 
   <!-- マスターボール上半分（紫） -->
   <clipPath id="topHalf">
-    <rect x="312" y="290" width="400" height="207"/>
+    <rect x="352" y="340" width="320" height="160"/>
   </clipPath>
-  <circle cx="512" cy="497" r="188" fill="url(#ballTop)" clip-path="url(#topHalf)"/>
+  <circle cx="512" cy="500" r="155" fill="url(#ballTop)" clip-path="url(#topHalf)"/>
 
   <!-- マスターボール下半分（白） -->
   <clipPath id="bottomHalf">
-    <rect x="312" y="503" width="400" height="200"/>
+    <rect x="352" y="505" width="320" height="160"/>
   </clipPath>
-  <circle cx="512" cy="497" r="188" fill="url(#ballBottom)" clip-path="url(#bottomHalf)"/>
+  <circle cx="512" cy="500" r="155" fill="url(#ballBottom)" clip-path="url(#bottomHalf)"/>
 
   <!-- マスターボール「M」マーク -->
-  <text x="512" y="468" text-anchor="middle" font-family="Arial Black, Impact, sans-serif" font-weight="900" font-size="130" fill="white" stroke="white" stroke-width="1" letter-spacing="-5">M</text>
+  <text x="512" y="470" text-anchor="middle" font-family="Arial Black, Impact, sans-serif" font-weight="900" font-size="110" fill="white" stroke="white" stroke-width="1" letter-spacing="-5">M</text>
 
   <!-- マスターボールのピンク丸（左右） -->
-  <circle cx="415" cy="410" r="16" fill="#FF69B4" fill-opacity="0.9"/>
-  <circle cx="609" cy="410" r="16" fill="#FF69B4" fill-opacity="0.9"/>
-  <circle cx="415" cy="410" r="9" fill="#FFB6D9" fill-opacity="0.6"/>
-  <circle cx="609" cy="410" r="9" fill="#FFB6D9" fill-opacity="0.6"/>
+  <circle cx="430" cy="420" r="14" fill="#FF69B4" fill-opacity="0.9"/>
+  <circle cx="594" cy="420" r="14" fill="#FF69B4" fill-opacity="0.9"/>
+  <circle cx="430" cy="420" r="8" fill="#FFB6D9" fill-opacity="0.6"/>
+  <circle cx="594" cy="420" r="8" fill="#FFB6D9" fill-opacity="0.6"/>
 
   <!-- 中央ライン -->
-  <rect x="322" y="489" width="380" height="16" rx="8" fill="#1A1A1A"/>
+  <rect x="355" y="492" width="314" height="16" rx="8" fill="#1A1A1A"/>
 
   <!-- 中央ボタン -->
-  <circle cx="512" cy="497" r="42" fill="#1A1A1A"/>
-  <circle cx="512" cy="497" r="33" fill="#F0F0F0" filter="url(#glow)"/>
-  <circle cx="512" cy="497" r="22" fill="#E8E8E8"/>
-  <circle cx="505" cy="490" r="9" fill="white" fill-opacity="0.6"/>
+  <circle cx="512" cy="500" r="36" fill="#1A1A1A"/>
+  <circle cx="512" cy="500" r="28" fill="#F0F0F0" filter="url(#glow)"/>
+  <circle cx="512" cy="500" r="18" fill="#E8E8E8"/>
+  <!-- ボタンのハイライト -->
+  <circle cx="506" cy="494" r="8" fill="white" fill-opacity="0.6"/>
 
   <!-- ボール上のハイライト -->
-  <ellipse cx="462" cy="390" rx="55" ry="28" fill="white" fill-opacity="0.15" transform="rotate(-20 462 390)"/>
+  <ellipse cx="470" cy="400" rx="50" ry="25" fill="white" fill-opacity="0.15" transform="rotate(-20 470 400)"/>
 
-  <!-- 王冠（小さく） -->
-  <g filter="url(#shadow)" transform="translate(512, 310) scale(0.55) translate(-512, -310)">
+  <!-- 王冠 -->
+  <g filter="url(#shadow)">
     <!-- 王冠ベース -->
     <path d="M400 310 L420 220 L466 280 L512 180 L558 280 L604 220 L624 310 Z" fill="url(#crownGrad)"/>
     <!-- 王冠の下部バンド -->
     <rect x="400" y="300" width="224" height="28" rx="4" fill="url(#goldGrad)"/>
+    <!-- 王冠の装飾ライン -->
     <rect x="408" y="310" width="208" height="4" rx="2" fill="#8B6914" fill-opacity="0.5"/>
+
     <!-- 王冠の頂点の丸 -->
     <circle cx="420" cy="218" r="12" fill="#FFD700" filter="url(#glow)"/>
     <circle cx="512" cy="178" r="14" fill="#FFD700" filter="url(#glow)"/>
     <circle cx="604" cy="218" r="12" fill="#FFD700" filter="url(#glow)"/>
+
     <!-- 王冠の宝石 -->
     <circle cx="440" cy="304" r="8" fill="#9B59B6"/>
     <circle cx="512" cy="304" r="10" fill="#9B59B6"/>
     <circle cx="584" cy="304" r="8" fill="#9B59B6"/>
   </g>
 
-  <!-- 星の装飾 -->
+  <!-- 星の装飾（王冠の周り） -->
   <g fill="#FFD700" fill-opacity="0.8" filter="url(#glow)">
-    <circle cx="400" cy="270" r="4"/>
-    <circle cx="624" cy="270" r="4"/>
-    <circle cx="375" cy="295" r="3"/>
-    <circle cx="649" cy="295" r="3"/>
+    <polygon points="370,270 375,258 380,270 392,272 383,280 385,292 375,286 365,292 367,280 358,272" transform="scale(0.7) translate(160,60)"/>
+    <polygon points="654,270 659,258 664,270 676,272 667,280 669,292 659,286 649,292 651,280 642,272" transform="scale(0.7) translate(-100,60)"/>
+    <circle cx="380" cy="250" r="4"/>
+    <circle cx="644" cy="250" r="4"/>
+    <circle cx="350" cy="290" r="3"/>
+    <circle cx="674" cy="290" r="3"/>
   </g>
 
 </svg>
