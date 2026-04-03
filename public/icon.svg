@@ -136,4 +136,56 @@
     <circle cx="649" cy="295" r="3"/>
   </g>
 
+  <!-- 紙吹雪 -->
+  <!-- 金の紙片 -->
+  <rect x="255" y="200" width="14" height="12" rx="2" fill="#D4A017" fill-opacity="0.85" transform="rotate(35 255 200)"/>
+  <rect x="715" y="260" width="12" height="10" rx="2" fill="#FFD700" fill-opacity="0.8" transform="rotate(-25 715 260)"/>
+  <rect x="695" y="530" width="14" height="12" rx="2" fill="#FFE88A" fill-opacity="0.8" transform="rotate(-40 695 530)"/>
+  <rect x="545" y="230" width="13" height="11" rx="2" fill="#FFD700" fill-opacity="0.85" transform="rotate(-50 545 230)"/>
+  <rect x="375" y="345" width="12" height="11" rx="2" fill="#D4A017" fill-opacity="0.7" transform="rotate(-18 375 345)"/>
+  <rect x="225" y="305" width="10" height="9" rx="2" fill="#FFD700" fill-opacity="0.75" transform="rotate(-65 225 305)"/>
+  <rect x="675" y="445" width="12" height="10" rx="2" fill="#C8961E" fill-opacity="0.6" transform="rotate(30 675 445)"/>
+  <rect x="310" y="260" width="13" height="11" rx="2" fill="#FFD700" fill-opacity="0.75" transform="rotate(8 310 260)"/>
+  <rect x="780" y="350" width="12" height="11" rx="2" fill="#FFD700" fill-opacity="0.65" transform="rotate(-48 780 350)"/>
+  <rect x="425" y="695" width="12" height="10" rx="2" fill="#C8961E" fill-opacity="0.7" transform="rotate(25 425 695)"/>
+  <rect x="650" y="700" width="11" height="10" rx="2" fill="#FFE88A" fill-opacity="0.65" transform="rotate(-33 650 700)"/>
+  <!-- ボール上の金 -->
+  <rect x="470" y="420" width="12" height="10" rx="2" fill="#FFD700" fill-opacity="0.7" transform="rotate(22 470 420)"/>
+  <rect x="560" y="540" width="11" height="9" rx="2" fill="#D4A017" fill-opacity="0.6" transform="rotate(-55 560 540)"/>
+  <rect x="490" y="580" width="13" height="11" rx="2" fill="#FFE88A" fill-opacity="0.65" transform="rotate(38 490 580)"/>
+  <rect x="440" y="350" width="10" height="9" rx="2" fill="#C8961E" fill-opacity="0.6" transform="rotate(-30 440 350)"/>
+  <rect x="590" y="400" width="11" height="10" rx="2" fill="#FFD700" fill-opacity="0.55" transform="rotate(65 590 400)"/>
+
+  <!-- 紫の紙片 -->
+  <rect x="745" y="365" width="13" height="11" rx="2" fill="#9B59B6" fill-opacity="0.8" transform="rotate(50 745 365)"/>
+  <rect x="290" y="335" width="12" height="10" rx="2" fill="#BB7FD6" fill-opacity="0.75" transform="rotate(-30 290 335)"/>
+  <rect x="465" y="305" width="11" height="9" rx="2" fill="#7D3C98" fill-opacity="0.65" transform="rotate(-42 465 305)"/>
+  <rect x="735" y="495" width="11" height="10" rx="2" fill="#7D3C98" fill-opacity="0.65" transform="rotate(38 735 495)"/>
+  <rect x="245" y="645" width="12" height="10" rx="2" fill="#9B59B6" fill-opacity="0.65" transform="rotate(-22 245 645)"/>
+  <rect x="600" y="250" width="10" height="9" rx="2" fill="#9B59B6" fill-opacity="0.6" transform="rotate(-52 600 250)"/>
+  <rect x="585" y="675" width="13" height="11" rx="2" fill="#BB7FD6" fill-opacity="0.7" transform="rotate(15 585 675)"/>
+  <!-- ボール上の紫 -->
+  <rect x="530" y="460" width="11" height="9" rx="2" fill="#9B59B6" fill-opacity="0.55" transform="rotate(70 530 460)"/>
+  <rect x="450" y="520" width="10" height="9" rx="2" fill="#BB7FD6" fill-opacity="0.5" transform="rotate(-20 450 520)"/>
+
+  <!-- ピンクの紙片 -->
+  <rect x="755" y="455" width="11" height="10" rx="2" fill="#FF69B4" fill-opacity="0.7" transform="rotate(20 755 455)"/>
+  <rect x="345" y="445" width="11" height="10" rx="2" fill="#FFB6D9" fill-opacity="0.6" transform="rotate(48 345 445)"/>
+  <rect x="685" y="325" width="12" height="10" rx="2" fill="#FF69B4" fill-opacity="0.7" transform="rotate(-12 685 325)"/>
+  <rect x="230" y="545" width="12" height="10" rx="2" fill="#FF69B4" fill-opacity="0.75" transform="rotate(-55 230 545)"/>
+  <rect x="565" y="295" width="10" height="9" rx="2" fill="#FF69B4" fill-opacity="0.65" transform="rotate(-35 565 295)"/>
+  <!-- ボール上のピンク -->
+  <rect x="480" y="470" width="10" height="9" rx="2" fill="#FF69B4" fill-opacity="0.5" transform="rotate(42 480 470)"/>
+  <rect x="555" y="510" width="11" height="9" rx="2" fill="#FFB6D9" fill-opacity="0.5" transform="rotate(-60 555 510)"/>
+
+  <!-- 白の紙片 -->
+  <rect x="655" y="220" width="11" height="10" rx="2" fill="white" fill-opacity="0.65" transform="rotate(-15 655 220)"/>
+  <rect x="340" y="485" width="10" height="9" rx="2" fill="white" fill-opacity="0.55" transform="rotate(45 340 485)"/>
+  <rect x="775" y="545" width="11" height="10" rx="2" fill="white" fill-opacity="0.5" transform="rotate(18 775 545)"/>
+  <rect x="385" y="245" width="9" height="8" rx="2" fill="white" fill-opacity="0.6" transform="rotate(-38 385 245)"/>
+  <rect x="635" y="575" width="11" height="10" rx="2" fill="white" fill-opacity="0.55" transform="rotate(-48 635 575)"/>
+  <!-- ボール上の白 -->
+  <rect x="520" y="380" width="10" height="8" rx="2" fill="white" fill-opacity="0.45" transform="rotate(15 520 380)"/>
+  <rect x="460" y="560" width="9" height="8" rx="2" fill="white" fill-opacity="0.4" transform="rotate(-50 460 560)"/>
+
 </svg>
