@@ -38,7 +38,7 @@
 https://pokemon-damage-calc.vercel.app/privacy
 
 ## サポートURL
-https://x.com/poketool2
+https://docs.google.com/forms/d/e/1FAIpQLSeoQzIDdHm0PU47rMoS_aP45IEAr1f7iXaAdG8VX61HOwBEEw/viewform
 
 ## 対象年齢
 4+（暴力・成人向けコンテンツなし）
