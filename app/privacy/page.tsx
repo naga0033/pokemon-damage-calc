@@ -126,7 +126,7 @@ export default function PrivacyPage() {
           本プライバシーポリシーに関するご質問、データ削除のご依頼は、以下までお願いいたします。
         </p>
         <ul style={{ paddingLeft: 20, marginTop: 8, listStyle: "none" }}>
-          <li>メール: <a href="mailto:poketool2.support@gmail.com" style={{ color: "#3b82f6" }}>poketool2.support@gmail.com</a></li>
+          <li>お問い合わせフォーム: <a href="https://docs.google.com/forms/d/e/1FAIpQLSeoQzIDdHm0PU47rMoS_aP45IEAr1f7iXaAdG8VX61HOwBEEw/viewform" target="_blank" rel="noopener noreferrer" style={{ color: "#3b82f6" }}>こちら</a></li>
           <li>X (Twitter): <a href="https://x.com/poketool2" style={{ color: "#3b82f6" }}>@poketool2</a></li>
         </ul>
       </section>
