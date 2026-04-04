@@ -19,10 +19,8 @@ const AuthContext = createContext<AuthState>({
 });
 
 function getAuthRedirectUrl() {
-  const userAgent = navigator.userAgent || "";
-  if (userAgent.includes("PokeDamageCalcApp")) {
-    return "pokedamagecalc://auth/callback";
-  }
+  // 常にWebのURLを使う（アプリ内でもブラウザでメールリンクが開かれるため）
+  // callbackページがカスタムスキームでアプリに戻す処理を行う
   const configuredUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
   if (configuredUrl) {
     return `${configuredUrl.replace(/\/+$/, "")}/auth/callback`;
