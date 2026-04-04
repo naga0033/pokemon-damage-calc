@@ -11,7 +11,7 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             WebView(viewModel: webViewModel)
-                .ignoresSafeArea()
+                .ignoresSafeArea(edges: .bottom)
 
             // エラー表示
             if let error = webViewModel.error {
@@ -720,6 +720,39 @@ struct WebView: UIViewRepresentable {
                 self.viewModel.isLoading = false
                 self.viewModel.error = error.localizedDescription
             }
+        }
+
+        // リンクをWebView内で処理するか外部ブラウザで開くか制御
+        func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+            guard let url = navigationAction.request.url else {
+                decisionHandler(.allow)
+                return
+            }
+
+            let host = url.host ?? ""
+            let baseHost = URL(string: appBaseURLString)?.host ?? ""
+
+            // アプリのドメインとSupabase認証はWebView内で処理
+            if host == baseHost || host.contains("supabase") {
+                decisionHandler(.allow)
+                return
+            }
+
+            // カスタムスキーム（pokedamagecalc://）はアプリで処理
+            if url.scheme == "pokedamagecalc" {
+                viewModel.handleIncomingAuthURL(url)
+                decisionHandler(.cancel)
+                return
+            }
+
+            // それ以外の外部リンクはSafariで開く
+            if navigationAction.navigationType == .linkActivated {
+                UIApplication.shared.open(url)
+                decisionHandler(.cancel)
+                return
+            }
+
+            decisionHandler(.allow)
         }
     }
 }

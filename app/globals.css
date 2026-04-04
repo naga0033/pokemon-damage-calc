@@ -14,6 +14,14 @@ body {
   color: #1a1a1a;
   min-height: 100vh;
   overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
 }
 
 /* number inputのスピナー非表示（横ズレ防止） */
@@ -24,6 +32,45 @@ input[type="number"]::-webkit-outer-spin-button {
 }
 input[type="number"] {
   -moz-appearance: textfield;
+}
+
+/* スマホ用スライダー: つまみを大きくしてタッチしやすく */
+@media (max-width: 768px) {
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    accent-color: transparent;
+    height: 28px;
+    background: transparent;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 3px;
+    background: #e5e7eb;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: #3b82f6;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+    margin-top: -8px;
+  }
+  input[type="range"]::-moz-range-track {
+    height: 6px;
+    border-radius: 3px;
+    background: #e5e7eb;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    background: #3b82f6;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+  }
 }
 
 /* カスタムスクロールバー */

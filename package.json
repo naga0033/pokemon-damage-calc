@@ -9,6 +9,9 @@
     "dev:clean": "rm -rf .next && next dev",
     "build": "next build",
     "build:clean": "rm -rf .next && next build",
+    "icons:generate": "node scripts/generate-app-icons.mjs",
+    "icons:restore:trophy": "node scripts/restore-legacy-icons.mjs",
+    "icons:use:poketch": "node scripts/use-poketch-icons.mjs",
     "start": "next start",
     "lint": "next lint",
     "test:damage": "rm -rf .tmp-tests && tsc -p tsconfig.test.json && node --test .tmp-tests/tests/*.test.js"

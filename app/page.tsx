@@ -3116,6 +3116,8 @@ export default function Home() {
   const { user, loading: authLoading, sendMagicLink, signOut } = useAuth();
   const [loginEmail, setLoginEmail] = useState("");
   const [loginOpen, setLoginOpen] = useState(false);
+  const [loginSending, setLoginSending] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const [loginMessage, setLoginMessage] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
 
@@ -3800,14 +3802,55 @@ export default function Home() {
             {/* ログイン/ログアウト（一番右） */}
             {!authLoading && (
               user ? (
-                <button
-                  onClick={signOut}
-                  className="flex items-center gap-1 px-1 sm:px-3 py-1 sm:py-1.5 rounded-md text-[8px] sm:text-xs font-medium transition-colors whitespace-nowrap hover:bg-gray-100 active:bg-gray-100 border"
-                  style={{ backgroundColor: "#fff", color: "#1e88e5", borderColor: "#1e88e5" }}
-                  title={user.email ?? ""}
-                >
-                  ログアウト
-                </button>
+                <div className="relative">
+                  <button
+                    onClick={() => setAccountMenuOpen((v) => !v)}
+                    className="flex items-center gap-1 px-1 sm:px-3 py-1 sm:py-1.5 rounded-md text-[8px] sm:text-xs font-medium transition-colors whitespace-nowrap hover:bg-gray-100 active:bg-gray-100 border"
+                    style={{ backgroundColor: "#fff", color: "#1e88e5", borderColor: "#1e88e5" }}
+                    title={user.email ?? ""}
+                  >
+                    ログアウト
+                  </button>
+                  {accountMenuOpen && (
+                    <>
+                      <div className="fixed inset-0 z-[90]" onClick={() => setAccountMenuOpen(false)} />
+                      <div className="absolute right-0 top-full mt-1 z-[91] bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[160px]">
+                        <button
+                          onClick={() => { setAccountMenuOpen(false); signOut(); }}
+                          className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                        >
+                          ログアウト
+                        </button>
+                        <div className="border-t border-gray-100" />
+                        <button
+                          onClick={async () => {
+                            setAccountMenuOpen(false);
+                            if (!confirm("本当にアカウントを削除しますか？\n\nサーバーに保存されたすべてのポケモンデータが完全に削除されます。この操作は元に戻せません。")) return;
+                            if (!confirm("最終確認：本当に削除しますか？\nこの操作は取り消せません。")) return;
+                            try {
+                              const { data: { session } } = await (await import("@/lib/supabase")).supabase.auth.getSession();
+                              if (!session) { alert("セッションが見つかりません。再度ログインしてください。"); return; }
+                              const res = await fetch("/api/delete-account", {
+                                method: "POST",
+                                headers: { Authorization: `Bearer ${session.access_token}` },
+                              });
+                              if (res.ok) {
+                                alert("アカウントが削除されました。");
+                                signOut();
+                              } else {
+                                const data = await res.json();
+                                alert(data.error || "削除に失敗しました。");
+                              }
+                            } catch { alert("エラーが発生しました。"); }
+                          }}
+                          className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors"
+                        >
+                          アカウント削除
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
               ) : (
                 <button
                   onClick={() => setLoginOpen(true)}
@@ -3843,19 +3886,27 @@ export default function Home() {
                   {loginMessage && <p className="text-xs text-green-600">{loginMessage}</p>}
                   <button
                     onClick={async () => {
-                      if (!loginEmail) return;
+                      if (!loginEmail || loginSending) return;
                       setLoginError(null);
                       setLoginMessage(null);
+                      setLoginSending(true);
                       const { error } = await sendMagicLink(loginEmail);
+                      setLoginSending(false);
                       if (error) {
                         setLoginError(error);
                       } else {
                         setLoginMessage("ログインリンクを送信しました。メールを確認してください。");
                       }
                     }}
-                    className="w-full py-2 rounded-lg text-sm font-bold text-white transition-colors hover:opacity-90" style={{ backgroundColor: "#1e88e5" }}
+                    disabled={loginSending}
+                    className="w-full py-2 rounded-lg text-sm font-bold text-white transition-colors hover:opacity-90 disabled:opacity-60" style={{ backgroundColor: "#1e88e5" }}
                   >
-                    ログインリンクを送る
+                    {loginSending ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4 31.4" strokeLinecap="round" /></svg>
+                        送信中...
+                      </span>
+                    ) : "ログインリンクを送る"}
                   </button>
                   <button onClick={() => { setLoginOpen(false); setLoginError(null); setLoginMessage(null); }}
                     className="w-full text-xs text-gray-400 hover:text-gray-600 py-1">

@@ -40,6 +40,8 @@ const STAT_KEYS: StatKey[] = ["hp", "attack", "defense", "spAtk", "spDef", "spee
 const NATURE_MOD_KEYS: StatKey[] = ["attack", "defense", "spAtk", "spDef", "speed"];
 const RANK_KEYS = ["attack", "spAtk", "defense", "spDef"] as const;
 type RankKey = typeof RANK_KEYS[number];
+const STAT_GRID_CLASS = "grid items-center gap-1 grid-cols-[2.4rem_1.25rem_minmax(0,1fr)_2.35rem_2.7rem] md:grid-cols-[3rem_1.5rem_minmax(0,1fr)_2.8rem_3.2rem]";
+const STAT_HEADER_GRID_CLASS = "grid items-end gap-1 mb-0.5 grid-cols-[2.4rem_1.25rem_minmax(0,1fr)_2.35rem_2.7rem] md:grid-cols-[3rem_1.5rem_minmax(0,1fr)_2.8rem_3.2rem]";
 
 /** EV逆算：IV=31固定 */
 function calcEvForTarget(
@@ -333,12 +335,12 @@ export default function StatEditor(props: Props) {
       {/* ステータス表 — 2段構成 */}
       <div className="space-y-0">
         {/* ヘッダーラベル行 */}
-        <div className="grid items-end gap-1 mb-0.5" style={{ gridTemplateColumns: "3rem 1.5rem 1fr 2.8rem 3.2rem" }}>
-          <span className="text-[9px] text-gray-400">能力</span>
-          <span className="text-[9px] text-gray-400 text-center">種族</span>
-          <span className="text-[9px] text-gray-400 text-center">能力PT</span>
-          <span className="text-[9px] text-gray-400 text-center">能力PT</span>
-          <span className="text-[9px] text-gray-400 text-center">実数値</span>
+        <div className={STAT_HEADER_GRID_CLASS}>
+          <span className="text-[8px] md:text-[9px] text-gray-400">能力</span>
+          <span className="text-[8px] md:text-[9px] text-gray-400 text-center">種族</span>
+          <span className="text-[8px] md:text-[9px] text-gray-400 text-center">能力PT</span>
+          <span className="text-[8px] md:text-[9px] text-gray-400 text-center">能力PT</span>
+          <span className="text-[8px] md:text-[9px] text-gray-400 text-center">実数値</span>
         </div>
         {STAT_KEYS.filter((key) => !visibleStats || visibleStats.includes(key)).map((key) => {
           const isUp   = boosted === key;
@@ -361,15 +363,15 @@ export default function StatEditor(props: Props) {
           return (
             <div key={key} className="border-b border-gray-100 py-1">
               {/* 1段目: 能力名 + 種族値 + スライダー + EV + 実数値 */}
-              <div className="grid items-center gap-1" style={{ gridTemplateColumns: "3rem 1.5rem 1fr 2.8rem 3.2rem" }}>
-                <span className="text-gray-600 font-medium text-xs whitespace-nowrap">{STAT_NAMES_JA[key]}</span>
-                <span className="text-[10px] text-gray-400 text-center">{baseStats[key]}</span>
+              <div className={STAT_GRID_CLASS}>
+                <span className="text-gray-600 font-medium text-[11px] md:text-xs whitespace-nowrap truncate">{STAT_NAMES_JA[key]}</span>
+                <span className="text-[9px] md:text-[10px] text-gray-400 text-center">{baseStats[key]}</span>
                 <div className="flex items-center gap-0.5 min-w-0">
                   <button className="text-[9px] px-0.5 py-0.5 rounded bg-gray-100 hover:bg-gray-200 text-gray-500 font-bold flex-shrink-0"
                     onMouseDown={(e) => { e.preventDefault(); onEvChange(key, 0); }}>0</button>
                   <input type="range" min={0} max={32} step={1} value={evs[key]}
                     onChange={(e) => { const v = Math.min(32, Math.max(0, +e.target.value)); const others = totalEv - evs[key]; onEvChange(key, Math.min(v, 66 - others)); }}
-                    className="flex-1 h-2 accent-blue-500 min-w-0" />
+                    className="flex-1 h-2 accent-blue-500 min-w-0" style={{ touchAction: "none", padding: "8px 0" }} />
                   <button className="text-[9px] px-0.5 py-0.5 rounded bg-orange-100 hover:bg-orange-200 text-orange-700 font-bold flex-shrink-0"
                     onMouseDown={(e) => { e.preventDefault(); const others = totalEv - evs[key]; onEvChange(key, Math.min(32, 66 - others)); }}>32</button>
                 </div>
@@ -378,7 +380,7 @@ export default function StatEditor(props: Props) {
                   {/* スマホ用: ネイティブテンキー */}
                   <input
                     type="text" inputMode="numeric" pattern="[0-9]*"
-                    className="md:hidden w-full border border-gray-200 rounded text-center text-[11px] py-0.5 text-gray-700 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200"
+                    className="md:hidden w-full border border-gray-200 rounded text-center text-[10px] py-0.5 text-gray-700 focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-200"
                     value={String(evs[key])}
                     onChange={(e) => {
                       const raw = e.target.value.replace(/[^0-9]/g, "");
@@ -397,7 +399,7 @@ export default function StatEditor(props: Props) {
                 </div>
                 {/* 実数値: スマホ=読み取り専用テキスト / PC=NumpadPopup */}
                 <div className="relative">
-                  <span className={`md:hidden block w-full text-center text-sm py-0.5 ${finalColor}`}>{finals[key]}</span>
+                  <span className={`md:hidden block w-full text-center text-[13px] py-0.5 ${finalColor}`}>{finals[key]}</span>
                   <button
                     className={`hidden md:block w-full text-center text-sm rounded-lg py-0.5 border-2 transition-colors ${finalColor} ${isFinalActive ? "border-blue-400 ring-1 ring-blue-200 bg-blue-50" : "border-transparent hover:border-gray-300 hover:bg-gray-50"}`}
                     onMouseDown={(e) => { e.preventDefault(); isFinalActive ? applyAndClose() : openNumpad(key, "final", finals[key], e.currentTarget); }}
@@ -409,12 +411,12 @@ export default function StatEditor(props: Props) {
 
               {/* 2段目: 性格補正 + ランク */}
               {(hasNatureMod || isRankKey) && (
-                <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mt-1 ml-8">
+                <div className="flex items-center flex-wrap gap-x-2 gap-y-1 mt-1 ml-[2.5rem] md:ml-8">
                   {/* 性格補正 */}
                   {hasNatureMod && (
                     <div className="flex items-center gap-1.5">
                       <span className="text-[10px] text-gray-400 flex-shrink-0">性格</span>
-                      <div className="flex gap-1">
+                      <div className="flex flex-wrap gap-1">
                         {(["down", "neutral", "up"] as const).map((mod) => {
                           const active = curMod === mod;
                           const label  = mod === "up" ? "↑1.1" : mod === "down" ? "↓0.9" : "1.0";
@@ -427,7 +429,7 @@ export default function StatEditor(props: Props) {
                               : "border-gray-200 text-gray-300 hover:bg-gray-50 hover:text-gray-500";
                           return (
                             <button key={mod}
-                              className={`text-[11px] px-2 py-1 rounded-lg border font-bold transition-colors cursor-pointer select-none min-w-[2.2rem] text-center ${cls}`}
+                              className={`text-[10px] md:text-[11px] px-1.5 md:px-2 py-0.5 md:py-1 rounded-lg border font-bold transition-colors cursor-pointer select-none min-w-[2rem] md:min-w-[2.2rem] text-center ${cls}`}
                               onMouseDown={(e) => { e.preventDefault(); if (!active) onNatureChange(pickNatureForMod(key, mod, nature)); }}
                             >{label}</button>
                           );
@@ -441,11 +443,11 @@ export default function StatEditor(props: Props) {
                     <div className="flex items-center gap-1.5">
                       <span className="text-[10px] text-gray-400 flex-shrink-0">ランク</span>
                       <button
-                        className="w-7 h-7 rounded-lg border-2 border-blue-200 bg-blue-50 hover:bg-blue-200 active:bg-blue-300 text-blue-700 text-sm font-bold flex items-center justify-center transition-colors"
+                        className="w-6 h-6 md:w-7 md:h-7 rounded-lg border-2 border-blue-200 bg-blue-50 hover:bg-blue-200 active:bg-blue-300 text-xs md:text-sm font-bold flex items-center justify-center transition-colors"
                         onMouseDown={(e) => { e.preventDefault(); onStatRankChange(key as RankKey, Math.max(-6, curRank - 1)); }}
                       >−</button>
                       <span
-                        className={`min-w-[2rem] text-center text-xs font-bold py-1 px-1 rounded-lg cursor-pointer select-none ${
+                        className={`min-w-[1.75rem] md:min-w-[2rem] text-center text-[11px] md:text-xs font-bold py-0.5 md:py-1 px-1 rounded-lg cursor-pointer select-none ${
                           curRank > 0 ? "text-red-700 bg-red-100 ring-2 ring-red-300" :
                           curRank < 0 ? "text-blue-700 bg-blue-100 ring-2 ring-blue-300" :
                           "text-gray-400 bg-gray-50"
@@ -454,7 +456,7 @@ export default function StatEditor(props: Props) {
                         title="ダブルクリックでリセット"
                       >{rankLabel}</span>
                       <button
-                        className="w-7 h-7 rounded-lg border-2 border-red-200 bg-red-50 hover:bg-red-200 active:bg-red-300 text-red-700 text-sm font-bold flex items-center justify-center transition-colors"
+                        className="w-6 h-6 md:w-7 md:h-7 rounded-lg border-2 border-red-200 bg-red-50 hover:bg-red-200 active:bg-red-300 text-xs md:text-sm font-bold flex items-center justify-center transition-colors"
                         onMouseDown={(e) => { e.preventDefault(); onStatRankChange(key as RankKey, Math.min(6, curRank + 1)); }}
                       >＋</button>
                     </div>
@@ -466,7 +468,7 @@ export default function StatEditor(props: Props) {
         })}
 
         {/* フッター */}
-        <div className="flex items-center justify-between mt-1.5 pt-1">
+        <div className="flex items-center justify-between gap-2 flex-wrap mt-1.5 pt-1">
           <p className="text-[10px] text-gray-400">
             能力ポイント合計: <span className={totalEv > 66 ? "text-red-500 font-bold" : ""}>{totalEv}</span>/66
           </p>
